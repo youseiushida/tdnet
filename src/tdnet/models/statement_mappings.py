@@ -52,32 +52,14 @@ _JGAAP_PL: dict[str, str] = {
     "ComprehensiveIncomeAttributableToOwnersOfTheParent": CK.COMPREHENSIVE_INCOME_PARENT,
     "ComprehensiveIncomeAttributableToNonControllingInterests": CK.COMPREHENSIVE_INCOME_MINORITY,
     "OtherComprehensiveIncome": CK.OCI_ACCUMULATED,
-    # NOI/NOE detail
+    # NOI/NOE/EI/EL detail — total と衝突するため除外。
+    # 個別の明細科目は LineItem.local_name で直接取得可能。
     "EquityInEarningsOfAffiliatesNOI": CK.EQUITY_METHOD_INCOME,
-    "InsuranceIncomeNOI": CK.NON_OPERATING_INCOME,
-    "RentIncomeNOI": CK.NON_OPERATING_INCOME,
-    "SubsidyIncomeNOIBounty": CK.NON_OPERATING_INCOME,
-    "GainOnValuationOfInvestmentSecuritiesNOI": CK.NON_OPERATING_INCOME,
-    "ForeignExchangeLossesNOE": CK.NON_OPERATING_EXPENSES,
-    "CommissionForPurchaseOfTreasuryStockNOE": CK.NON_OPERATING_EXPENSES,
-    "LossOnValuationOfInvestmentSecuritiesNOE": CK.NON_OPERATING_EXPENSES,
-    # EI/EL detail
-    "GainOnSalesOfNoncurrentAssetsEI": CK.EXTRAORDINARY_INCOME,
-    "GainOnSalesOfInvestmentSecuritiesEI": CK.EXTRAORDINARY_INCOME,
-    "GainOnExtinguishmentOfTieInSharesEI": CK.EXTRAORDINARY_INCOME,
-    "SubsidyEI": CK.EXTRAORDINARY_INCOME,
-    "LossOnRetirementOfNoncurrentAssetsEL": CK.EXTRAORDINARY_LOSS,
     "ImpairmentLossEL": CK.IMPAIRMENT_LOSS_PL,
-    # SGA detail
+    # SGA detail — 独自 CK を持つもののみマッピング。
     "DepreciationSGA": CK.DEPRECIATION_SGA,
     "ResearchAndDevelopmentExpensesSGA": CK.RD_EXPENSES,
-    # SGA detail — total の SellingGeneralAndAdministrativeExpenses と
-    # 混同しないよう、detail はマッピングしない。
-    # 必要であれば LineItem.local_name で直接取得可能。
-    # COGS detail — total の CostOfSales と混同しないよう除外。
-    # OCI detail
-    "ValuationDifferenceOnAvailableForSaleSecuritiesNetOfTaxOCI": CK.OCI_ACCUMULATED,
-    "ForeignCurrencyTranslationAdjustmentNetOfTaxOCI": CK.OCI_ACCUMULATED,
+    # OCI detail — total の OtherComprehensiveIncome と衝突するため除外。
 }
 
 # ---------------------------------------------------------------------------
@@ -95,12 +77,7 @@ _JGAAP_BS: dict[str, str] = {
     "ElectronicallyRecordedMonetaryClaimsOperatingCA": CK.TRADE_RECEIVABLES,
     "NotesReceivableTrade": CK.NOTES_RECEIVABLE,
     "Inventories": CK.INVENTORIES,
-    "Merchandise": CK.INVENTORIES,
-    "MerchandiseAndFinishedGoods": CK.INVENTORIES,
-    "RawMaterials": CK.INVENTORIES,
-    "RawMaterialsAndSupplies": CK.INVENTORIES,
-    "WorkInProcess": CK.INVENTORIES,
-    "ShortTermInvestmentSecurities": CK.INVESTMENT_SECURITIES,
+    # 棚卸資産 detail (Merchandise, WorkInProcess 等) — total と衝突するため除外。
     "PrepaidExpenses": CK.PREPAID_EXPENSES,
     "ContractAssets": CK.CONTRACT_ASSETS,
     "ContractAssetsNet": CK.CONTRACT_ASSETS,
@@ -108,17 +85,13 @@ _JGAAP_BS: dict[str, str] = {
     # NCA - PPE
     "PropertyPlantAndEquipment": CK.PPE,
     "Land": CK.LAND,
-    "Buildings": CK.BUILDINGS_NET,
     "BuildingsNet": CK.BUILDINGS_NET,
     "ConstructionInProgress": CK.CONSTRUCTION_IN_PROGRESS,
-    "MachineryAndEquipmentNet": CK.PPE,
-    "ToolsFurnitureAndFixturesNet": CK.PPE,
-    "ToolsFurnitureAndFixtures": CK.PPE,
+    # PPE detail (Buildings, MachineryAndEquipmentNet 等) — total と衝突するため除外。
     # NCA - IA
     "IntangibleAssets": CK.INTANGIBLE_ASSETS,
     "Goodwill": CK.GOODWILL,
-    "Software": CK.INTANGIBLE_ASSETS,
-    "SoftwareInProgress": CK.INTANGIBLE_ASSETS,
+    # IA detail (Software, SoftwareInProgress) — total と衝突するため除外。
     # NCA - IOA
     "InvestmentSecurities": CK.INVESTMENT_SECURITIES,
     "InvestmentsAndOtherAssets": CK.INVESTMENTS_AND_OTHER,
@@ -132,15 +105,15 @@ _JGAAP_BS: dict[str, str] = {
     "AdvancesReceived": CK.CONTRACT_LIABILITIES,
     "ShortTermLoansPayable": CK.SHORT_TERM_LOANS,
     "CurrentPortionOfLongTermLoansPayable": CK.CURRENT_PORTION_OF_LONG_TERM_LOANS,
-    "IncomeTaxesPayable": CK.CURRENT_LIABILITIES,
     "ProvisionForBonuses": CK.PROVISIONS_CL,
     "CurrentLiabilities": CK.CURRENT_LIABILITIES,
+    # CL detail (IncomeTaxesPayable 等) — total と衝突するため除外。
     # NCL
     "LongTermLoansPayable": CK.LONG_TERM_LOANS,
     "BondsPayable": CK.BONDS_PAYABLE,
     "ProvisionForRetirementBenefits": CK.RETIREMENT_BENEFIT_LIABILITY,
-    "AssetRetirementObligationsNCL": CK.NONCURRENT_LIABILITIES,
     "NoncurrentLiabilities": CK.NONCURRENT_LIABILITIES,
+    # NCL detail (AssetRetirementObligationsNCL 等) — total と衝突するため除外。
     "Liabilities": CK.TOTAL_LIABILITIES,
     # NA
     "CapitalStock": CK.CAPITAL_STOCK,
@@ -149,8 +122,7 @@ _JGAAP_BS: dict[str, str] = {
     "TreasuryStock": CK.TREASURY_STOCK,
     "ShareholdersEquity": CK.SHAREHOLDERS_EQUITY,
     "ValuationAndTranslationAdjustments": CK.OCI_ACCUMULATED,
-    "ValuationDifferenceOnAvailableForSaleSecurities": CK.OCI_ACCUMULATED,
-    "ForeignCurrencyTranslationAdjustment": CK.OCI_ACCUMULATED,
+    # OCI BS detail (ValuationDifference..., ForeignCurrency...) — total と衝突するため除外。
     "SubscriptionRightsToShares": CK.SUBSCRIPTION_RIGHTS,
     "NonControllingInterests": CK.MINORITY_INTERESTS,
     "NetAssets": CK.NET_ASSETS,

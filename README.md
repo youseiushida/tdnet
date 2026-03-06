@@ -192,6 +192,45 @@ if ev is not None:
     print(ev.item)           # 元の LineItem
 ```
 
+## ローカル XBRL の解析
+
+別途ダウンロードした XBRL ZIP ファイルを直接解析できます。API 通信は不要です。
+
+```python
+from tdnet import parse_zip, CK, extract_values, extracted_to_dict
+
+# ZIP ファイルを読み込み
+with open("140120250306553722.zip", "rb") as f:
+    zip_data = f.read()
+
+# 解析
+stmts = parse_zip(zip_data)
+
+# 値の抽出
+result = extract_values(
+    stmts,
+    [CK.REVENUE, CK.OPERATING_INCOME, CK.NET_INCOME_PARENT],
+    period="current",
+    consolidated=True,
+)
+row = extracted_to_dict(result)
+for k, v in row.items():
+    print(f"{k}: {v}")
+```
+
+iXBRL ファイルを直接渡すこともできます。
+
+```python
+from tdnet import parse_ixbrl_files
+
+# ファイル名をキー、iXBRL bytes を値とする辞書
+files = {
+    "summary-ixbrl.htm": open("summary-ixbrl.htm", "rb").read(),
+    "attachment-ixbrl.htm": open("attachment-ixbrl.htm", "rb").read(),
+}
+stmts = parse_ixbrl_files(files)
+```
+
 ## CK 以外の FACT へのアクセス
 
 CK にマッピングされていない科目は `local_name` / `search()` / イテレーションで直接取得できます。
@@ -244,14 +283,16 @@ for item in pl:
 
 ## パイプラインマッパー
 
-デフォルトのマッパーパイプラインは `[summary_mapper, statement_mapper]` です。
+デフォルトのマッパーパイプラインは `[dividend_mapper, forecast_mapper, summary_mapper, statement_mapper]` です。
 
 | マッパー | 対象 | 概念数 |
 |:---|:---|:---|
+| `dividend_mapper` | 配当（DPS）、AnnualDividendPaymentScheduleAxis 対応 | — |
+| `forecast_mapper` | 業績予想（ResultForecastAxis=ForecastMember） | — |
 | `summary_mapper` | tse-ed-t サマリー科目（経営指標） | 230+ (XSD検証済) |
-| `statement_mapper` | jppfs_cor PL/BS/CF 本体 | 90+ |
+| `statement_mapper` | jppfs_cor / IFRS / US-GAAP / REIT PL/BS/CF 本体 | 190+ |
 
-先頭のマッパーほど高優先。`summary_mapper` でマッチしなかった科目を `statement_mapper` が補完します。
+先頭のマッパーほど高優先。1 アイテムに対して最初にマッチしたマッパーが採用されます。
 
 ### カスタムマッパーの追加
 

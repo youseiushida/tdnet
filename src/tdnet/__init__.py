@@ -47,6 +47,7 @@ from xbrl_core import (
 
 from tdnet.models.financial_statement import FinancialStatement
 from tdnet.models.statements import Statements
+from tdnet.xbrl.parser import parse_zip, parse_ixbrl_files
 
 
 def documents(
@@ -126,6 +127,9 @@ __all__ = [
     "summary_mapper",
     "statement_mapper",
     "dict_mapper",
+    # XBRL パーサー
+    "parse_zip",
+    "parse_ixbrl_files",
     # ファイリング
     "Filing",
     "documents",

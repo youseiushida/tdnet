@@ -1,6 +1,10 @@
 # tdnet — TDnet 適時開示情報 Python ライブラリ
 
+[![PyPI version](https://img.shields.io/pypi/v/tdnet.svg)](https://pypi.org/project/tdnet/)
 [![Python](https://img.shields.io/pypi/pyversions/tdnet.svg)](https://pypi.org/project/tdnet/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Context7 Indexed](https://img.shields.io/badge/Context7-Indexed-047857)](https://context7.com/youseiushida/tdnet)
+[![Context7 llms.txt](https://img.shields.io/badge/Context7-llms.txt-047857)](https://context7.com/youseiushida/tdnet/llms.txt)
 
 **tdnet** は、[TDnet（適時開示情報伝達システム）](https://www.release.tdnet.info/)の開示書類を取得・解析する Python ライブラリです。決算短信・業績予想修正・配当予想修正などの XBRL を自動パースし、230+ の正規化キー（CK）で J-GAAP / IFRS / US-GAAP の財務数値を統一的に抽出できます。内部の HTTP 通信には [httpx](https://github.com/encode/httpx) を、iXBRL 解析には [xbrl-core](https://github.com/youseiushida/xbrl-core) を使用しています。
 

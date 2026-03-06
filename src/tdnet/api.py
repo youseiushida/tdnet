@@ -102,15 +102,17 @@ def _scrape_list_page(target_date: str | date, page: int = 1) -> list[dict]:
 
     url = f"{_BASE_URL}/inbs/I_list_{page:03d}_{target_date}.html"
     response = get(url)
-    return _parse_list_html(response.text, target_date)
+    return _parse_list_html(response.content, target_date)
 
 
-def _parse_list_html(html: str, date_str: str) -> list[dict]:
+def _parse_list_html(html: str | bytes, date_str: str) -> list[dict]:
     """一覧ページ HTML をパースする。"""
     from lxml import etree
 
     try:
-        doc = etree.HTML(html.encode("utf-8"))
+        raw = html if isinstance(html, bytes) else html.encode("utf-8")
+        parser = etree.HTMLParser(encoding="utf-8")
+        doc = etree.HTML(raw, parser=parser)
     except Exception as exc:
         raise TdnetParseError(f"Failed to parse HTML: {exc}") from exc
 
@@ -213,15 +215,17 @@ def search(
     data = {"t0": start_date, "t1": end_date, "q": keyword, "m": str(lang)}
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     response = post(url, data=data, headers=headers)
-    return _parse_search_html(response.text)
+    return _parse_search_html(response.content)
 
 
-def _parse_search_html(html: str) -> list[dict]:
+def _parse_search_html(html: str | bytes) -> list[dict]:
     """検索結果 HTML をパースする。"""
     from lxml import etree
 
     try:
-        doc = etree.HTML(html.encode("utf-8"))
+        raw = html if isinstance(html, bytes) else html.encode("utf-8")
+        parser = etree.HTMLParser(encoding="utf-8")
+        doc = etree.HTML(raw, parser=parser)
     except Exception as exc:
         raise TdnetParseError(f"Failed to parse search HTML: {exc}") from exc
 

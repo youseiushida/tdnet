@@ -264,15 +264,31 @@ class Statements:
         return results
 
     def to_dataframe(self) -> pd.DataFrame:
-        """全 LineItem を全カラム DataFrame に変換する。"""
+        """全 LineItem を全カラム DataFrame に変換する。
+
+        ``value`` 列は数値（float）のみ。文字列値は ``value_text`` 列に格納される。
+        Decimal → float 変換済み（parquet/arrow 互換）。
+        """
         import pandas as pd
+        from decimal import Decimal
 
         rows: list[dict[str, object]] = []
         for item in self._items:
+            raw = item.value
+            if isinstance(raw, Decimal):
+                num_val: float | None = float(raw)
+                text_val: str | None = None
+            elif isinstance(raw, str):
+                num_val = None
+                text_val = raw
+            else:
+                num_val = None
+                text_val = None
             rows.append({
                 "label_ja": item.label_ja.text,
                 "label_en": item.label_en.text,
-                "value": item.value,
+                "value": num_val,
+                "value_text": text_val,
                 "unit": item.unit_ref,
                 "concept": item.concept,
                 "context_id": item.context_id,

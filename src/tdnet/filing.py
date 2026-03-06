@@ -90,13 +90,36 @@ class Filing:
         )
 
     def fetch_pdf(self) -> bytes:
-        """PDF をダウンロードする。"""
+        """PDF をダウンロードする。
+
+        Raises:
+            TdnetError: PDF が存在しない、または取得したデータが PDF でない場合。
+        """
         if not self.document_url:
-            raise TdnetError("This filing has no PDF")
+            raise TdnetError("This filing has no PDF URL (document_url is empty)")
 
-        from tdnet.api import download_pdf
+        from tdnet.api import download_file
 
-        return download_pdf(self.document_url)
+        data = download_file(self.document_url)
+        if data[:5] == b"%PDF-":
+            return data
+
+        # document_url が PDF でなかった場合、xbrl_url からPDF URLを推測
+        if self.xbrl_url:
+            # xbrl_url の拡張子を .pdf に置換して試行
+            pdf_url_guess = self.xbrl_url.rsplit(".", 1)[0] + ".pdf"
+            if pdf_url_guess != self.document_url:
+                try:
+                    data2 = download_file(pdf_url_guess)
+                    if data2[:5] == b"%PDF-":
+                        return data2
+                except TdnetError:
+                    pass
+
+        raise TdnetError(
+            "PDF を取得できませんでした。"
+            "document_url が PDF ではなく、代替 URL からも取得できません。"
+        )
 
     def _cache_key(self) -> str:
         """キャッシュキーを生成する。"""

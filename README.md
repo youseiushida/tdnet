@@ -62,7 +62,7 @@ from tdnet import list_by_range
 items = list_by_range("20260301", "20260305", has_xbrl=True)
 ```
 
-データソースは [やのしんWEB-API](https://webapi.yanoshin.jp/webapi/tdnet/) をデフォルトで使用します。`source="scrape"` で release.tdnet.info の直接スクレイピングも可能です。
+データソースは [やのしんWEB-API](https://webapi.yanoshin.jp/) をデフォルトで使用します。`source="scrape"` で release.tdnet.info の直接スクレイピングも可能です。
 
 ## Filing
 

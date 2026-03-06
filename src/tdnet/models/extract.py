@@ -62,11 +62,48 @@ class ExtractedValue:
 # ---------------------------------------------------------------------------
 
 
+def _period_end_date(period_obj: object) -> object | None:
+    """Period オブジェクトから終了日を取得する。"""
+    if hasattr(period_obj, "end_date"):
+        return period_obj.end_date  # DurationPeriod
+    if hasattr(period_obj, "instant"):
+        return period_obj.instant  # InstantPeriod
+    return None
+
+
+def _detect_current_period_end(items: tuple[LineItem, ...]) -> object | None:
+    """当期の期間終了日を検出する。
+
+    1. CurrentMember ディメンション付きアイテムがあればその終了日を返す。
+    2. なければ、monetary アイテムの期間終了日の最頻値を返す。
+    """
+    from tdnet.models.statements import _period_key
+
+    for item in items:
+        if _period_key(item) == "current":
+            end = _period_end_date(item.period)
+            if end is not None:
+                return end
+
+    # Fallback: monetary アイテムの期間終了日の最頻値
+    from collections import Counter
+    end_counts: Counter[object] = Counter()
+    for item in items:
+        if item.unit_ref is not None:
+            end = _period_end_date(item.period)
+            if end is not None:
+                end_counts[end] += 1
+    if end_counts:
+        return end_counts.most_common(1)[0][0]
+    return None
+
+
 def _filter_item(
     item: LineItem,
     *,
     period: Literal["current", "prior"] | None,
     consolidated: bool | None,
+    current_period_end: object | None = None,
 ) -> bool:
     """期間・連結フィルタを適用し、通過すれば True を返す。"""
     from tdnet.models.statements import _is_consolidated, _period_key
@@ -77,11 +114,21 @@ def _filter_item(
         if cons is not None and cons != consolidated:
             return False
 
-    # 期間フィルタ（TDnet は dimension ベースで当期/前期を区別）
+    # 期間フィルタ
     if period is not None:
         pk = _period_key(item)
         if pk is not None and pk != period:
             return False
+        # Dimension がない場合（attachment 部の jppfs_cor 等）は
+        # XBRL 期間の実日付で current/prior を判定する
+        if pk is None and current_period_end is not None:
+            item_end = _period_end_date(item.period)
+            if item_end is not None:
+                is_current = (item_end == current_period_end)
+                if period == "current" and not is_current:
+                    return False
+                if period == "prior" and is_current:
+                    return False
 
     return True
 
@@ -141,6 +188,11 @@ def extract_values(
         {str(k) for k in keys} if keys is not None else None
     )
 
+    # 当期の終了日を検出（dimension なしアイテムの期間判定用）
+    current_end = (
+        _detect_current_period_end(source._items) if period is not None else None
+    )
+
     # 1 パスマッパーループ
     # ck_to_item: {canonical_key: (LineItem, pipeline_position, mapper_name)}
     ck_to_item: dict[str, tuple[LineItem, int, str | None]] = {}
@@ -150,6 +202,7 @@ def extract_values(
             item,
             period=period,
             consolidated=consolidated,
+            current_period_end=current_end,
         ):
             continue
 

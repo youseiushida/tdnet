@@ -36,12 +36,23 @@ def _is_consolidated(item: LineItem) -> bool | None:
 
 
 def _period_key(item: LineItem) -> str | None:
-    """LineItem が当期/前期かを判定する。"""
+    """LineItem が当期/前期かを判定する。
+
+    1. ディメンション (CurrentMember/PreviousMember) で判定（四半期短信）。
+    2. context_id のプレフィックス (Current*/Prior*) で判定（本決算）。
+    """
+    # 1. Dimension-based
     for dim in item.dimensions:
         if dim.member == _CURRENT_MEMBER or "CurrentMember" in dim.member:
             return "current"
         if dim.member == _PREVIOUS_MEMBER or "PreviousMember" in dim.member:
             return "prior"
+    # 2. Context ID-based fallback
+    ctx = item.context_id
+    if ctx.startswith("Current"):
+        return "current"
+    if ctx.startswith("Prior"):
+        return "prior"
     return None
 
 

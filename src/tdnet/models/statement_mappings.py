@@ -184,26 +184,29 @@ _JPCRP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 _IFRS_PL: dict[str, str] = {
-    # PL
-    "RevenueIFRS": CK.REVENUE,
+    # PL — 基底名（サフィックス除去でもマッチ）
     "OtherIncome": CK.OTHER_INCOME_IFRS,
     "OtherExpenses": CK.OTHER_EXPENSES_IFRS,
     "OtherExpense": CK.OTHER_EXPENSES_IFRS,
     "FinanceIncome": CK.FINANCE_INCOME,
+    "OtherFinanceIncome": CK.FINANCE_INCOME,
     "FinanceCosts": CK.FINANCE_COSTS,
+    "OtherFinanceCosts": CK.FINANCE_COSTS,
     "FinanceRevenue": CK.FINANCE_INCOME,
     "FinanceExpenses": CK.FINANCE_COSTS,
     "OperatingProfit": CK.OPERATING_INCOME,
-    "OperatingProfitIFRS": CK.OPERATING_INCOME,
     "ShareOfProfitLossOfAssociatesAndJointVenturesAccountedForUsingEquityMethod": CK.EQUITY_METHOD_INCOME_IFRS,
     "ShareOfProfitLossOfInvestmentsAccountedForUsingEquityMethod": CK.EQUITY_METHOD_INCOME_IFRS,
     "ProfitLossBeforeTax": CK.INCOME_BEFORE_TAX,
     "ProfitBeforeIncomeTax": CK.INCOME_BEFORE_TAX,
     "ProfitBeforeTax": CK.INCOME_BEFORE_TAX,
     "IncomeTaxExpense": CK.INCOME_TAXES,
-    "ProfitLossAttributableToOwnersOfParentIFRS": CK.NET_INCOME_PARENT,
     "ProfitAttributableToOwnersOfParent": CK.NET_INCOME_PARENT,
-    "ProfitLossAttributableToNonControllingInterestsIFRS": CK.NET_INCOME_MINORITY,
+    "Profit": CK.NET_INCOME,
+    "NetIncome": CK.NET_INCOME,
+    "TotalAssets": CK.TOTAL_ASSETS,
+    "OperatingRevenues": CK.REVENUE,
+    "OperatingExpenses": CK.SGA_EXPENSES,
     # CI
     "TotalComprehensiveIncome": CK.COMPREHENSIVE_INCOME,
     "ComprehensiveIncomeAttributableToOwnersOfParent": CK.COMPREHENSIVE_INCOME_PARENT,
@@ -213,9 +216,18 @@ _IFRS_PL: dict[str, str] = {
     "DepreciationAndAmortisationExpense": CK.DEPRECIATION_CF,
     "ImpairmentLossRecognisedInProfitOrLoss": CK.IMPAIRMENT_LOSS_PL,
     "ResearchAndDevelopmentExpense": CK.RD_EXPENSES,
+    # PL — IFRS サフィックス付き明示登録（サフィックス除去で基底名がない概念用）
+    "RevenueIFRS": CK.REVENUE,
+    "OperatingProfitIFRS": CK.OPERATING_INCOME,
+    "ProfitLossAttributableToOwnersOfParentIFRS": CK.NET_INCOME_PARENT,
+    "ProfitLossAttributableToNonControllingInterestsIFRS": CK.NET_INCOME_MINORITY,
+    "ProfitIFRS": CK.NET_INCOME,
+    "ProfitLossIFRS": CK.NET_INCOME,
+    "TotalComprehensiveIncomeIFRS": CK.COMPREHENSIVE_INCOME,
 }
 
 _IFRS_BS: dict[str, str] = {
+    "NonCurrentAssets": CK.NONCURRENT_ASSETS,
     "TradeAndOtherReceivables": CK.TRADE_RECEIVABLES,
     "TradeAndOtherCurrentReceivables": CK.TRADE_RECEIVABLES,
     "InvestmentProperty": CK.INVESTMENT_PROPERTY,
@@ -310,10 +322,59 @@ _USGAAP_CF: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# 銀行（jppfs_bk / jpcrp_bk タクソノミ）
+# ---------------------------------------------------------------------------
+
+_BANKING: dict[str, str] = {
+    # BS
+    "LoansAndBillsDiscounted": CK.LOANS_AND_BILLS_DISCOUNTED,
+    "LoansAndBillsDiscountedBK": CK.LOANS_AND_BILLS_DISCOUNTED,
+    "Securities": CK.SECURITIES_BANKING,
+    "SecuritiesBK": CK.SECURITIES_BANKING,
+    "SecuritiesFinBu": CK.SECURITIES_BANKING,
+    "Deposits": CK.DEPOSITS,
+    "DepositsBK": CK.DEPOSITS,
+    # PL
+    "OrdinaryRevenues": CK.ORDINARY_REVENUE_BANKING,
+    "OrdinaryRevenuesBK": CK.ORDINARY_REVENUE_BANKING,
+    "OrdinaryExpenses": CK.SGA_EXPENSES,
+    # Ratios
+    "ConsolidatedCapitalAdequacyRatioBIS": CK.CAPITAL_ADEQUACY_RATIO_BIS,
+    "CapitalAdequacyRatioBIS": CK.CAPITAL_ADEQUACY_RATIO_BIS,
+    "ConsolidatedCapitalAdequacyRatioBISBK": CK.CAPITAL_ADEQUACY_RATIO_BIS,
+    "ConsolidatedCapitalAdequacyRatioBIS1stBK": CK.CAPITAL_ADEQUACY_RATIO_INTERNATIONAL,
+    "NonConsolidatedCapitalAdequacyRatioBISBK": CK.CAPITAL_ADEQUACY_RATIO_BIS,
+    "ConsolidatedCapitalAdequacyRatioDomesticBK": CK.CAPITAL_ADEQUACY_RATIO_DOMESTIC,
+    "NonConsolidatedCapitalAdequacyRatioDomesticBK": CK.CAPITAL_ADEQUACY_RATIO_DOMESTIC,
+}
+
+# ---------------------------------------------------------------------------
+# 保険（jppfs_in / jpcrp_in タクソノミ）
+# ---------------------------------------------------------------------------
+
+_INSURANCE: dict[str, str] = {
+    # PL
+    "OrdinaryRevenuesIN": CK.ORDINARY_REVENUE_INSURANCE,
+    "NetPremiumsWritten": CK.NET_PREMIUMS_WRITTEN,
+    "NetPremiumsWrittenIN": CK.NET_PREMIUMS_WRITTEN,
+    "InterestAndDividendIncome": CK.INTEREST_DIVIDEND_INCOME_INS,
+    "InterestAndDividendIncomeIN": CK.INTEREST_DIVIDEND_INCOME_INS,
+    "InvestmentIncomeIN": CK.INVESTMENT_YIELD_INCOME,
+    "InvestmentYieldIncomeIN": CK.INVESTMENT_YIELD_INCOME,
+    "InvestmentYieldRealizedGainsAndLossesIN": CK.INVESTMENT_YIELD_REALIZED,
+    # Ratios
+    "LossRatioIN": CK.NET_LOSS_RATIO,
+    "NetLossRatio": CK.NET_LOSS_RATIO,
+    "ExpenseRatioIN": CK.NET_OPERATING_EXPENSE_RATIO,
+    "NetOperatingExpenseRatio": CK.NET_OPERATING_EXPENSE_RATIO,
+}
+
+# ---------------------------------------------------------------------------
 # REIT（jppfs_cor / 投資法人タクソノミ）
 # ---------------------------------------------------------------------------
 
 _REIT: dict[str, str] = {
+    # PL/BS — REIT サフィックス付き（サフィックス除去でも基底名がマッチ）
     "OperatingRevenuesREIT": CK.REVENUE,
     "OperatingExpensesREIT": CK.SGA_EXPENSES,
     "OperatingIncomeREIT": CK.OPERATING_INCOME,
@@ -321,7 +382,14 @@ _REIT: dict[str, str] = {
     "NetIncomeREIT": CK.NET_INCOME,
     "TotalAssetsREIT": CK.TOTAL_ASSETS,
     "NetAssetsREIT": CK.NET_ASSETS,
+    # Per-unit（REIT 固有概念名 — サフィックス除去では拾えない）
     "DistributionPerUnit": CK.DPS,
+    "DistributionsPerUnitExcludingDistributionsInExcessOfProfitREIT": CK.DPS,
+    "DistributionsInExcessOfProfitPerUnitREIT": CK.EXTRA_DIVIDEND,
+    "TotalDistributionsPerUnitREIT": CK.TOTAL_DIVIDEND_PAID,
+    "NetIncomePerUnitREIT": CK.EPS,
+    "NetAssetsPerUnitREIT": CK.BPS,
+    # 一般
     "RentalRevenue": CK.REVENUE,
     "OperatingRevenue": CK.REVENUE,
     "OperatingRevenue1": CK.REVENUE,
@@ -336,6 +404,7 @@ _CONCEPT_INDEX: dict[str, str] = {
     **_JGAAP_PL, **_JGAAP_BS, **_JGAAP_CF, **_JPCRP,
     **_IFRS_PL, **_IFRS_BS, **_IFRS_CF,
     **_USGAAP_PL, **_USGAAP_BS, **_USGAAP_CF,
+    **_BANKING, **_INSURANCE,
     **_REIT,
 }
 
@@ -351,10 +420,24 @@ def lookup_statement_exact(concept: str) -> str | None:
 
 
 def lookup_statement_normalized(concept: str) -> str | None:
-    """正規化フォールバック。現状 TDnet Attachment には不要。"""
+    """正規化フォールバック: IFRS / REIT サフィックスを除去して再検索。
+
+    TDnet の IFRS 添付財務諸表では概念名に ``IFRS`` サフィックスが付く
+    (例: ``FinanceIncomeIFRS``, ``CostOfSalesIFRS``)。
+    サフィックスを除去して基底辞書を再検索する。
+    """
+    for suffix in ("IFRS", "REIT"):
+        if concept.endswith(suffix) and len(concept) > len(suffix):
+            base = concept[:-len(suffix)]
+            result = _CONCEPT_INDEX.get(base)
+            if result is not None:
+                return result
     return None
 
 
 def lookup_statement(concept: str) -> str | None:
-    """PL/BS/CF の concept から CK を返す。"""
-    return lookup_statement_exact(concept)
+    """PL/BS/CF の concept から CK を返す。完全一致 → サフィックス除去の順。"""
+    result = lookup_statement_exact(concept)
+    if result is not None:
+        return result
+    return lookup_statement_normalized(concept)

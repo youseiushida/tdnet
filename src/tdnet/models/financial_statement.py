@@ -115,7 +115,7 @@ class FinancialStatement:
                 row["order"] = item.order
                 row["period"] = str(item.period)
                 dims = "; ".join(f"{d.axis}={d.member}" for d in item.dimensions)
-                row["dimensions"] = dims if dims else None
+                row["dimensions"] = dims if dims else ""
             rows.append(row)
 
         df = pd.DataFrame(rows)

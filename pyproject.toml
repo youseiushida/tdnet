@@ -20,3 +20,8 @@ path = "src/tdnet/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tdnet"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

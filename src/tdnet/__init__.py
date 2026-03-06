@@ -71,9 +71,10 @@ def documents(
     """
     if source == "yanoshin":
         if code is not None:
-            items = list_by_code(code, has_xbrl=has_xbrl, limit=limit)
+            code_str = str(code).lstrip("0") or "0"
+            items = list_by_code(code_str, has_xbrl=has_xbrl, limit=limit)
         elif target_date is not None:
-            date_str = target_date.replace("-", "")
+            date_str = target_date.replace("-", "").replace("/", "")
             items = list_by_date(date_str, has_xbrl=has_xbrl, limit=limit)
         else:
             items = list_recent(has_xbrl=has_xbrl, limit=limit)
@@ -84,7 +85,7 @@ def documents(
         if target_date is None:
             from datetime import date as _date
             target_date = _date.today().strftime("%Y%m%d")
-        date_str = target_date.replace("-", "")
+        date_str = target_date.replace("-", "").replace("/", "")
         items = _scrape_list_page(date_str)
         return [Filing.from_scrape(item) for item in items]
     else:

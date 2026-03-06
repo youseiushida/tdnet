@@ -139,13 +139,29 @@ def _filter_period(
     return True
 
 
+def _has_any_consolidated(items: tuple[LineItem, ...]) -> bool:
+    """ソース内に連結アイテムが1つでも存在するか判定する。"""
+    from tdnet.models.statements import _is_consolidated
+
+    for item in items:
+        if _is_consolidated(item) is True:
+            return True
+    return False
+
+
 def _filter_consolidated(
     item: LineItem,
     *,
     consolidated: bool | None,
     ck: str | None = None,
+    source_has_consolidated: bool = True,
 ) -> bool:
-    """連結フィルタ。CK が _ALWAYS_NONCONSOLIDATED_CKS に含まれる場合はスキップ。"""
+    """連結フィルタ。CK が _ALWAYS_NONCONSOLIDATED_CKS に含まれる場合はスキップ。
+
+    REIT 銘柄は全アイテムが NonConsolidatedMember のため、
+    REIT サフィックス付き概念名は consolidated フィルタを適用しない。
+    また、ソース全体に連結アイテムが存在しない場合もフィルタを適用しない。
+    """
     from tdnet.models.statements import _is_consolidated
 
     if consolidated is None:
@@ -155,8 +171,22 @@ def _filter_consolidated(
     if ck is not None and ck in _ALWAYS_NONCONSOLIDATED_CKS:
         return True
 
+    # REIT 概念は常に NonConsolidated → フィルタ不適用
+    if item.local_name.endswith("REIT"):
+        return True
+
+    # ソースに連結アイテムが1つも無い場合（REIT等）→ フィルタ不適用
+    if consolidated and not source_has_consolidated:
+        return True
+
     cons = _is_consolidated(item)
     if cons is not None and cons != consolidated:
+        return False
+
+    # IFRS 添付等: ConsolidatedNonconsolidatedAxis なし（cons=None）で
+    # ソースに連結アイテムが存在する場合、未マーク項目は連結扱い。
+    # consolidated=False リクエスト時にフィルタする。
+    if cons is None and not consolidated and source_has_consolidated:
         return False
 
     return True
@@ -255,6 +285,11 @@ def extract_values(
         _detect_current_period_end(source._items) if period is not None else None
     )
 
+    # REIT 等: ソースに連結アイテムが無い場合は consolidated フィルタを無効化
+    has_cons = (
+        _has_any_consolidated(source._items) if consolidated is not None else True
+    )
+
     # 1 パスマッパーループ
     # ck_to_item: {canonical_key: (LineItem, pipeline_position, mapper_name)}
     ck_to_item: dict[str, tuple[LineItem, int, str | None]] = {}
@@ -278,6 +313,7 @@ def extract_values(
             # 連結フィルタ（CK-aware: DPS 等は NonConsolidated を許容）
             if not _filter_consolidated(
                 item, consolidated=consolidated, ck=ck,
+                source_has_consolidated=has_cons,
             ):
                 break
 

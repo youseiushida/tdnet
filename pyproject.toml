@@ -1,0 +1,22 @@
+[project]
+name = "tdnet"
+dynamic = ["version"]
+description = "TDnet 適時開示情報の Python ライブラリ"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "xbrl-core>=0.1.2",
+    "lxml>=5.0",
+    "pandas>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/tdnet/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tdnet"]

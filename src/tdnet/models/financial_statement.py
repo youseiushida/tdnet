@@ -78,15 +78,31 @@ class FinancialStatement:
         return result
 
     def to_dataframe(self, *, full: bool = False) -> pd.DataFrame:
-        """pandas DataFrame に変換する。"""
+        """pandas DataFrame に変換する。
+
+        ``value`` 列は数値（float）のみ。文字列値は ``value_text`` 列に格納される。
+        Decimal → float 変換済み（parquet/arrow 互換）。
+        """
         import pandas as pd
+        from decimal import Decimal
 
         rows: list[dict[str, object]] = []
         for item in self.items:
+            raw = item.value
+            if isinstance(raw, Decimal):
+                num_val: float | None = float(raw)
+                text_val: str | None = None
+            elif isinstance(raw, str):
+                num_val = None
+                text_val = raw
+            else:
+                num_val = None
+                text_val = None
             row: dict[str, object] = {
                 "label_ja": item.label_ja.text,
                 "label_en": item.label_en.text,
-                "value": item.value,
+                "value": num_val,
+                "value_text": text_val,
                 "unit": item.unit_ref,
                 "concept": item.concept,
             }
@@ -99,7 +115,7 @@ class FinancialStatement:
                 row["order"] = item.order
                 row["period"] = str(item.period)
                 dims = "; ".join(f"{d.axis}={d.member}" for d in item.dimensions)
-                row["dimensions"] = dims
+                row["dimensions"] = dims if dims else None
             rows.append(row)
 
         df = pd.DataFrame(rows)

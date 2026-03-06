@@ -42,7 +42,12 @@ def _yanoshin_list(
         params["hasXBRL"] = 1
 
     response = get(url, params=params)
-    data = response.json()
+    try:
+        data = response.json()
+    except Exception as exc:
+        raise TdnetParseError(
+            f"Failed to parse JSON response from {url}: {exc}"
+        ) from exc
     return data.get("items", [])
 
 

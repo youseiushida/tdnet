@@ -309,7 +309,7 @@ class Statements:
                 "is_nil": item.is_nil,
                 "order": item.order,
                 "period": str(item.period),
-                "dimensions": "; ".join(f"{d.axis}={d.member}" for d in item.dimensions),
+                "dimensions": "; ".join(f"{d.axis}={d.member}" for d in item.dimensions) or None,
             })
         return pd.DataFrame(rows)
 

@@ -3,7 +3,7 @@
 パイプラインマッパーで Statements を 1 パス走査し、
 canonical key で値を取り出す。
 
-デフォルトパイプライン ``[summary_mapper, statement_mapper]``
+デフォルトパイプライン ``[dividend_mapper, forecast_mapper, summary_mapper, statement_mapper]``
 で tse-ed-t サマリー科目 + jppfs_cor PL/BS/CF 本体を名寄せする。
 
 使用例::
@@ -38,6 +38,19 @@ if TYPE_CHECKING:
 __all__ = ["ExtractedValue", "extract_values", "extracted_to_dict"]
 
 _CK_MEMBERS: frozenset[str] = frozenset(CK)
+
+# DPS・配当関連 CK は常に NonConsolidatedMember のため
+# consolidated=True でもフィルタしない
+_ALWAYS_NONCONSOLIDATED_CKS: frozenset[str] = frozenset({
+    CK.DPS,
+    CK.INTERIM_DPS,
+    CK.FORECAST_DPS,
+    CK.COMMEMORATIVE_DIVIDEND,
+    CK.EXTRA_DIVIDEND,
+    CK.TOTAL_DIVIDEND_PAID,
+    CK.PAYOUT_RATIO,
+    CK.DIVIDENDS_FROM_SURPLUS,
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,39 +111,88 @@ def _detect_current_period_end(items: tuple[LineItem, ...]) -> object | None:
     return None
 
 
-def _filter_item(
+def _filter_period(
     item: LineItem,
     *,
     period: Literal["current", "prior"] | None,
-    consolidated: bool | None,
     current_period_end: object | None = None,
 ) -> bool:
-    """期間・連結フィルタを適用し、通過すれば True を返す。"""
-    from tdnet.models.statements import _is_consolidated, _period_key
+    """期間フィルタのみ適用。通過すれば True。"""
+    from tdnet.models.statements import _period_key
 
-    # 連結フィルタ
-    if consolidated is not None:
-        cons = _is_consolidated(item)
-        if cons is not None and cons != consolidated:
-            return False
+    if period is None:
+        return True
 
-    # 期間フィルタ
-    if period is not None:
-        pk = _period_key(item)
-        if pk is not None and pk != period:
-            return False
-        # Dimension がない場合（attachment 部の jppfs_cor 等）は
-        # XBRL 期間の実日付で current/prior を判定する
-        if pk is None and current_period_end is not None:
-            item_end = _period_end_date(item.period)
-            if item_end is not None:
-                is_current = (item_end == current_period_end)
-                if period == "current" and not is_current:
-                    return False
-                if period == "prior" and is_current:
-                    return False
+    pk = _period_key(item)
+    if pk is not None and pk != period:
+        return False
+    # Dimension がない場合は XBRL 期間の実日付で判定
+    if pk is None and current_period_end is not None:
+        item_end = _period_end_date(item.period)
+        if item_end is not None:
+            is_current = (item_end == current_period_end)
+            if period == "current" and not is_current:
+                return False
+            if period == "prior" and is_current:
+                return False
 
     return True
+
+
+def _filter_consolidated(
+    item: LineItem,
+    *,
+    consolidated: bool | None,
+    ck: str | None = None,
+) -> bool:
+    """連結フィルタ。CK が _ALWAYS_NONCONSOLIDATED_CKS に含まれる場合はスキップ。"""
+    from tdnet.models.statements import _is_consolidated
+
+    if consolidated is None:
+        return True
+
+    # DPS 等は常に NonConsolidatedMember → consolidated フィルタ不適用
+    if ck is not None and ck in _ALWAYS_NONCONSOLIDATED_CKS:
+        return True
+
+    cons = _is_consolidated(item)
+    if cons is not None and cons != consolidated:
+        return False
+
+    return True
+
+
+def _item_should_replace(
+    existing_item: LineItem,
+    new_item: LineItem,
+    existing_idx: int,
+    new_idx: int,
+    period: Literal["current", "prior"] | None,
+) -> bool:
+    """新しいアイテムが既存アイテムを置き換えるべきか判定。"""
+    from tdnet.models.statements import _period_key
+
+    # パイプライン上位マッパーを優先
+    if new_idx < existing_idx:
+        return True
+    if new_idx > existing_idx:
+        return False
+
+    # 同一マッパー: period=None なら current を優先
+    if period is None:
+        existing_pk = _period_key(existing_item)
+        new_pk = _period_key(new_item)
+        if existing_pk != new_pk:
+            if new_pk == "current":
+                return True
+            if existing_pk == "current":
+                return False
+
+    # 非 None 値を優先
+    if new_item.value is not None and existing_item.value is None:
+        return True
+
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +220,7 @@ def extract_values(
         period: 期間フィルタ。"current" で当期、"prior" で前期。
         consolidated: 連結フィルタ。True で連結、False で個別。
         mapper: マッパーまたはマッパーのシーケンス。
-            None の場合は [summary_mapper, statement_mapper]。
+            None の場合は [dividend_mapper, forecast_mapper, summary_mapper, statement_mapper]。
 
     Returns:
         {canonical_key: ExtractedValue | None} の辞書。
@@ -198,10 +260,10 @@ def extract_values(
     ck_to_item: dict[str, tuple[LineItem, int, str | None]] = {}
 
     for item in source:
-        if not _filter_item(
+        # 期間フィルタ（マッピング前に適用）
+        if not _filter_period(
             item,
             period=period,
-            consolidated=consolidated,
             current_period_end=current_end,
         ):
             continue
@@ -212,15 +274,20 @@ def extract_values(
                 continue
             if target_keys is not None and ck not in target_keys:
                 continue
+
+            # 連結フィルタ（CK-aware: DPS 等は NonConsolidated を許容）
+            if not _filter_consolidated(
+                item, consolidated=consolidated, ck=ck,
+            ):
+                break
+
             name = getattr(mapper_fn, "__name__", None)
             existing = ck_to_item.get(ck)
             if existing is None:
                 ck_to_item[ck] = (item, idx, name)
-            elif idx < existing[1]:
-                # 上流パイプラインのマッパーを優先
-                ck_to_item[ck] = (item, idx, name)
-            elif item.value is not None and existing[0].value is None:
-                # 同一マッパーなら非 None 値を優先
+            elif _item_should_replace(
+                existing[0], item, existing[1], idx, period,
+            ):
                 ck_to_item[ck] = (item, idx, name)
             break  # 1 item に対して最初にマッチしたマッパーを採用
 

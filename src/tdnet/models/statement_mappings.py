@@ -1,11 +1,11 @@
 """PL/BS/CF 本体の concept → CK マッピング。
 
-決算短信 Attachment 部分で使用される jppfs_cor タクソノミの
+決算短信 Attachment 部分で使用される jppfs_cor / IFRS / US-GAAP タクソノミの
 concept を CK にマッピングする。
 
 jppfs_cor は EDINET と共通タクソノミのため、
 edinet の statement_mappings.py から主要概念を移植。
-サンプル 4 社の全 177 概念を確認の上、マッピング可能な概念を網羅。
+IFRS / US-GAAP / REIT 固有概念も網羅。
 """
 
 from __future__ import annotations
@@ -52,14 +52,12 @@ _JGAAP_PL: dict[str, str] = {
     "ComprehensiveIncomeAttributableToOwnersOfTheParent": CK.COMPREHENSIVE_INCOME_PARENT,
     "ComprehensiveIncomeAttributableToNonControllingInterests": CK.COMPREHENSIVE_INCOME_MINORITY,
     "OtherComprehensiveIncome": CK.OCI_ACCUMULATED,
-    # NOI/NOE/EI/EL detail — total と衝突するため除外。
-    # 個別の明細科目は LineItem.local_name で直接取得可能。
+    # NOI/NOE/EI/EL detail
     "EquityInEarningsOfAffiliatesNOI": CK.EQUITY_METHOD_INCOME,
     "ImpairmentLossEL": CK.IMPAIRMENT_LOSS_PL,
-    # SGA detail — 独自 CK を持つもののみマッピング。
+    # SGA detail
     "DepreciationSGA": CK.DEPRECIATION_SGA,
     "ResearchAndDevelopmentExpensesSGA": CK.RD_EXPENSES,
-    # OCI detail — total の OtherComprehensiveIncome と衝突するため除外。
 }
 
 # ---------------------------------------------------------------------------
@@ -77,7 +75,6 @@ _JGAAP_BS: dict[str, str] = {
     "ElectronicallyRecordedMonetaryClaimsOperatingCA": CK.TRADE_RECEIVABLES,
     "NotesReceivableTrade": CK.NOTES_RECEIVABLE,
     "Inventories": CK.INVENTORIES,
-    # 棚卸資産 detail (Merchandise, WorkInProcess 等) — total と衝突するため除外。
     "PrepaidExpenses": CK.PREPAID_EXPENSES,
     "ContractAssets": CK.CONTRACT_ASSETS,
     "ContractAssetsNet": CK.CONTRACT_ASSETS,
@@ -87,11 +84,9 @@ _JGAAP_BS: dict[str, str] = {
     "Land": CK.LAND,
     "BuildingsNet": CK.BUILDINGS_NET,
     "ConstructionInProgress": CK.CONSTRUCTION_IN_PROGRESS,
-    # PPE detail (Buildings, MachineryAndEquipmentNet 等) — total と衝突するため除外。
     # NCA - IA
     "IntangibleAssets": CK.INTANGIBLE_ASSETS,
     "Goodwill": CK.GOODWILL,
-    # IA detail (Software, SoftwareInProgress) — total と衝突するため除外。
     # NCA - IOA
     "InvestmentSecurities": CK.INVESTMENT_SECURITIES,
     "InvestmentsAndOtherAssets": CK.INVESTMENTS_AND_OTHER,
@@ -107,13 +102,11 @@ _JGAAP_BS: dict[str, str] = {
     "CurrentPortionOfLongTermLoansPayable": CK.CURRENT_PORTION_OF_LONG_TERM_LOANS,
     "ProvisionForBonuses": CK.PROVISIONS_CL,
     "CurrentLiabilities": CK.CURRENT_LIABILITIES,
-    # CL detail (IncomeTaxesPayable 等) — total と衝突するため除外。
     # NCL
     "LongTermLoansPayable": CK.LONG_TERM_LOANS,
     "BondsPayable": CK.BONDS_PAYABLE,
     "ProvisionForRetirementBenefits": CK.RETIREMENT_BENEFIT_LIABILITY,
     "NoncurrentLiabilities": CK.NONCURRENT_LIABILITIES,
-    # NCL detail (AssetRetirementObligationsNCL 等) — total と衝突するため除外。
     "Liabilities": CK.TOTAL_LIABILITIES,
     # NA
     "CapitalStock": CK.CAPITAL_STOCK,
@@ -122,15 +115,12 @@ _JGAAP_BS: dict[str, str] = {
     "TreasuryStock": CK.TREASURY_STOCK,
     "ShareholdersEquity": CK.SHAREHOLDERS_EQUITY,
     "ValuationAndTranslationAdjustments": CK.OCI_ACCUMULATED,
-    # OCI BS detail (ValuationDifference..., ForeignCurrency...) — total と衝突するため除外。
     "SubscriptionRightsToShares": CK.SUBSCRIPTION_RIGHTS,
     "NonControllingInterests": CK.MINORITY_INTERESTS,
     "NetAssets": CK.NET_ASSETS,
     "LiabilitiesAndNetAssets": CK.LIABILITIES_AND_NET_ASSETS,
     "DeferredTaxAssets": CK.DEFERRED_TAX_ASSETS,
     "DeferredTaxLiabilities": CK.DEFERRED_TAX_LIABILITIES,
-    # SS — detail 項目は BS total と衝突するためマッピングしない。
-    # DividendsFromSurplus 等は LineItem.local_name で直接取得可能。
 }
 
 # ---------------------------------------------------------------------------
@@ -190,11 +180,163 @@ _JPCRP: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# IFRS PL/BS/CF（ifrs / jpigp_cor タクソノミ）
+# ---------------------------------------------------------------------------
+
+_IFRS_PL: dict[str, str] = {
+    # PL
+    "RevenueIFRS": CK.REVENUE,
+    "OtherIncome": CK.OTHER_INCOME_IFRS,
+    "OtherExpenses": CK.OTHER_EXPENSES_IFRS,
+    "OtherExpense": CK.OTHER_EXPENSES_IFRS,
+    "FinanceIncome": CK.FINANCE_INCOME,
+    "FinanceCosts": CK.FINANCE_COSTS,
+    "FinanceRevenue": CK.FINANCE_INCOME,
+    "FinanceExpenses": CK.FINANCE_COSTS,
+    "OperatingProfit": CK.OPERATING_INCOME,
+    "OperatingProfitIFRS": CK.OPERATING_INCOME,
+    "ShareOfProfitLossOfAssociatesAndJointVenturesAccountedForUsingEquityMethod": CK.EQUITY_METHOD_INCOME_IFRS,
+    "ShareOfProfitLossOfInvestmentsAccountedForUsingEquityMethod": CK.EQUITY_METHOD_INCOME_IFRS,
+    "ProfitLossBeforeTax": CK.INCOME_BEFORE_TAX,
+    "ProfitBeforeIncomeTax": CK.INCOME_BEFORE_TAX,
+    "ProfitBeforeTax": CK.INCOME_BEFORE_TAX,
+    "IncomeTaxExpense": CK.INCOME_TAXES,
+    "ProfitLossAttributableToOwnersOfParentIFRS": CK.NET_INCOME_PARENT,
+    "ProfitAttributableToOwnersOfParent": CK.NET_INCOME_PARENT,
+    "ProfitLossAttributableToNonControllingInterestsIFRS": CK.NET_INCOME_MINORITY,
+    # CI
+    "TotalComprehensiveIncome": CK.COMPREHENSIVE_INCOME,
+    "ComprehensiveIncomeAttributableToOwnersOfParent": CK.COMPREHENSIVE_INCOME_PARENT,
+    "ComprehensiveIncomeAttributableToNonControllingInterests": CK.COMPREHENSIVE_INCOME_MINORITY,
+    # Depreciation / R&D
+    "DepreciationAndAmortisation": CK.DEPRECIATION_CF,
+    "DepreciationAndAmortisationExpense": CK.DEPRECIATION_CF,
+    "ImpairmentLossRecognisedInProfitOrLoss": CK.IMPAIRMENT_LOSS_PL,
+    "ResearchAndDevelopmentExpense": CK.RD_EXPENSES,
+}
+
+_IFRS_BS: dict[str, str] = {
+    "TradeAndOtherReceivables": CK.TRADE_RECEIVABLES,
+    "TradeAndOtherCurrentReceivables": CK.TRADE_RECEIVABLES,
+    "InvestmentProperty": CK.INVESTMENT_PROPERTY,
+    "RightOfUseAssets": CK.RIGHT_OF_USE_ASSETS,
+    "InvestmentsAccountedForUsingEquityMethod": CK.EQUITY_METHOD_INVESTMENTS,
+    "IntangibleAssetsOtherThanGoodwill": CK.INTANGIBLE_ASSETS,
+    "TradeAndOtherPayables": CK.TRADE_PAYABLES,
+    "TradeAndOtherCurrentPayables": CK.TRADE_PAYABLES,
+    "Equity": CK.NET_ASSETS,
+    "TotalEquity": CK.NET_ASSETS,
+    "EquityAttributableToOwnersOfParent": CK.EQUITY_PARENT,
+    "IssuedCapital": CK.CAPITAL_STOCK,
+    "SharePremium": CK.CAPITAL_SURPLUS,
+    "TreasuryShares": CK.TREASURY_STOCK,
+    "OtherComponentsOfEquity": CK.OCI_ACCUMULATED,
+}
+
+_IFRS_CF: dict[str, str] = {
+    "CashFlowsFromUsedInOperatingActivities": CK.OPERATING_CF,
+    "CashFlowsFromUsedInInvestingActivities": CK.INVESTING_CF,
+    "CashFlowsFromUsedInFinancingActivities": CK.FINANCING_CF,
+    "IncreaseDecreaseInCashAndCashEquivalents": CK.NET_CHANGE_IN_CASH,
+    "CashAndCashEquivalentsAtEndOfPeriod": CK.CASH_END,
+}
+
+
+# ---------------------------------------------------------------------------
+# US-GAAP PL/BS/CF
+# ---------------------------------------------------------------------------
+
+_USGAAP_PL: dict[str, str] = {
+    "Revenues": CK.REVENUE,
+    "NetRevenues": CK.REVENUE,
+    "SalesRevenueNet": CK.REVENUE,
+    "SalesRevenueGoodsNet": CK.REVENUE,
+    "SalesRevenueServicesNet": CK.REVENUE,
+    "CostOfGoodsSold": CK.COST_OF_SALES,
+    "CostOfGoodsAndServicesSold": CK.COST_OF_SALES,
+    "CostOfRevenue": CK.COST_OF_SALES,
+    "InterestIncome": CK.INTEREST_INCOME_PL,
+    "InterestExpense": CK.INTEREST_EXPENSE_PL,
+    "InterestIncomeExpenseNet": CK.INTEREST_INCOME_PL,
+    "IncomeLossFromContinuingOperationsBeforeIncomeTaxes": CK.INCOME_BEFORE_TAX,
+    "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest": CK.INCOME_BEFORE_TAX,
+    "IncomeTaxExpenseBenefit": CK.INCOME_TAXES,
+    "NetIncomeLoss": CK.NET_INCOME,
+    "NetIncomeLossAttributableToParent": CK.NET_INCOME_PARENT,
+    "NetIncomeLossAvailableToCommonStockholdersBasic": CK.NET_INCOME_PARENT,
+    "NetIncomeLossAttributableToNoncontrollingInterest": CK.NET_INCOME_MINORITY,
+    "OtherComprehensiveIncomeLossNetOfTax": CK.OCI_ACCUMULATED,
+    "ComprehensiveIncomeNetOfTax": CK.COMPREHENSIVE_INCOME,
+    "ComprehensiveIncomeNetOfTaxAttributableToParent": CK.COMPREHENSIVE_INCOME_PARENT,
+    "ComprehensiveIncomeNetOfTaxAttributableToNoncontrollingInterest": CK.COMPREHENSIVE_INCOME_MINORITY,
+    "OperatingIncomeLoss": CK.OPERATING_INCOME,
+    "ResearchAndDevelopmentExpense": CK.RD_EXPENSES,
+    "DepreciationDepletionAndAmortization": CK.DEPRECIATION_CF,
+    "DepreciationAndAmortization": CK.DEPRECIATION_CF,
+    "EarningsPerShareBasic": CK.EPS,
+    "EarningsPerShareDiluted": CK.EPS_DILUTED,
+}
+
+_USGAAP_BS: dict[str, str] = {
+    "CashAndCashEquivalentsAtCarryingValue": CK.CASH_AND_EQUIVALENTS,
+    "AccountsReceivableNetCurrent": CK.TRADE_RECEIVABLES,
+    "AccountsReceivableNet": CK.TRADE_RECEIVABLES,
+    "InventoryNet": CK.INVENTORIES,
+    "PropertyPlantAndEquipmentNet": CK.PPE,
+    "IntangibleAssetsNetExcludingGoodwill": CK.INTANGIBLE_ASSETS,
+    "AssetsCurrent": CK.CURRENT_ASSETS,
+    "AssetsNoncurrent": CK.NONCURRENT_ASSETS,
+    "LiabilitiesCurrent": CK.CURRENT_LIABILITIES,
+    "LiabilitiesNoncurrent": CK.NONCURRENT_LIABILITIES,
+    "StockholdersEquity": CK.SHAREHOLDERS_EQUITY,
+    "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest": CK.NET_ASSETS,
+    "MinorityInterest": CK.MINORITY_INTERESTS,
+    "CommonStockValue": CK.CAPITAL_STOCK,
+    "AdditionalPaidInCapital": CK.CAPITAL_SURPLUS,
+    "AccumulatedOtherComprehensiveIncomeLossNetOfTax": CK.OCI_ACCUMULATED,
+    "TreasuryStockValue": CK.TREASURY_STOCK,
+}
+
+_USGAAP_CF: dict[str, str] = {
+    "NetCashProvidedByUsedInOperatingActivities": CK.OPERATING_CF,
+    "NetCashProvidedByUsedInInvestingActivities": CK.INVESTING_CF,
+    "NetCashProvidedByUsedInFinancingActivities": CK.FINANCING_CF,
+    "EffectOfExchangeRateOnCashAndCashEquivalents": CK.FX_EFFECT_ON_CASH,
+    "CashAndCashEquivalentsPeriodIncreaseDecrease": CK.NET_CHANGE_IN_CASH,
+    "PaymentsToAcquirePropertyPlantAndEquipment": CK.PURCHASE_PPE_CF,
+    "ProceedsFromSaleOfPropertyPlantAndEquipment": CK.PROCEEDS_PPE_SALE_CF,
+    "PaymentsOfDividends": CK.DIVIDENDS_PAID_CF,
+}
+
+
+# ---------------------------------------------------------------------------
+# REIT（jppfs_cor / 投資法人タクソノミ）
+# ---------------------------------------------------------------------------
+
+_REIT: dict[str, str] = {
+    "OperatingRevenuesREIT": CK.REVENUE,
+    "OperatingExpensesREIT": CK.SGA_EXPENSES,
+    "OperatingIncomeREIT": CK.OPERATING_INCOME,
+    "OrdinaryIncomeREIT": CK.ORDINARY_INCOME,
+    "NetIncomeREIT": CK.NET_INCOME,
+    "TotalAssetsREIT": CK.TOTAL_ASSETS,
+    "NetAssetsREIT": CK.NET_ASSETS,
+    "DistributionPerUnit": CK.DPS,
+    "RentalRevenue": CK.REVENUE,
+    "OperatingRevenue": CK.REVENUE,
+    "OperatingRevenue1": CK.REVENUE,
+}
+
+
+# ---------------------------------------------------------------------------
 # 統合インデックス
 # ---------------------------------------------------------------------------
 
 _CONCEPT_INDEX: dict[str, str] = {
     **_JGAAP_PL, **_JGAAP_BS, **_JGAAP_CF, **_JPCRP,
+    **_IFRS_PL, **_IFRS_BS, **_IFRS_CF,
+    **_USGAAP_PL, **_USGAAP_BS, **_USGAAP_CF,
+    **_REIT,
 }
 
 

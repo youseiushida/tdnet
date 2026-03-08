@@ -374,6 +374,32 @@ pl_df = stmts.income_statement().to_dataframe()
 bs_df = stmts.balance_sheet().to_dataframe(full=True)  # 全カラム
 ```
 
+## Parquet 永続化
+
+`tdnet.extension` を使うと、Filing + Statements を Parquet に書き出し・読み戻しできます。過去データの蓄積や横断比較に便利です。
+
+```python
+from tdnet.extension import to_parquet, from_parquet
+
+# 保存: (Filing, Statements | None) のリストを渡す
+pairs = [(f, f.xbrl()) for f in filings]
+to_parquet(pairs, "./data/2026Q1")
+
+# 復元: Filing + Statements がそのまま戻る
+restored = from_parquet("./data/2026Q1")
+for filing, stmts in restored:
+    if stmts is None:
+        continue
+    row = extracted_to_dict(
+        extract_values(stmts, [CK.REVENUE, CK.OPERATING_INCOME], period="current")
+    )
+    print(f"{filing.company_code}: {row}")
+```
+
+出力ファイルは `filings.parquet`（メタデータ）と `line_items.parquet`（全 LineItem）の 2 ファイルです。復元後の `Statements` は `income_statement()` / `extract_values()` / `search()` 等すべてのメソッドがそのまま動作します。
+
+> Statements=None の Filing（XBRL なし等）も混在して保存できます。
+
 ## 複数銘柄の一括処理
 
 ```python

@@ -9,7 +9,7 @@ import logging
 from datetime import date
 
 from tdnet._config import get_config
-from tdnet._http import get, post
+from tdnet._http import aget, get, post
 from tdnet.exceptions import TdnetAPIError, TdnetParseError
 
 logger = logging.getLogger(__name__)
@@ -230,6 +230,39 @@ def download_file_with_fallback(
     jpx_url = _build_jpx_url(url, company_code)
     logger.info("TDnet %d, JPX にフォールバック: %s", status_code, jpx_url)
     data = download_file(jpx_url)
+    return data, jpx_url
+
+
+async def adownload_file(url: str) -> bytes:
+    """非同期でファイルをダウンロードする。"""
+    response = await aget(url)
+    return response.content
+
+
+async def adownload_file_with_fallback(
+    url: str,
+    company_code: str,
+) -> tuple[bytes, str]:
+    """非同期でファイルをダウンロードする。TDnet で 403/404 の場合は JPX にフォールバック。
+
+    Args:
+        url: ダウンロード URL (release.tdnet.info)。
+        company_code: 証券コード (5桁)。
+
+    Returns:
+        (ファイルデータ, 実際にダウンロードした URL) のタプル。
+    """
+    try:
+        data = await adownload_file(url)
+        return data, url
+    except TdnetAPIError as exc:
+        if exc.status_code not in (403, 404):
+            raise
+        status_code = exc.status_code
+
+    jpx_url = _build_jpx_url(url, company_code)
+    logger.info("TDnet %d, JPX にフォールバック: %s", status_code, jpx_url)
+    data = await adownload_file(jpx_url)
     return data, jpx_url
 
 

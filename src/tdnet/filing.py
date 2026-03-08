@@ -112,6 +112,102 @@ class Filing:
             entity_id=self.company_code,
         )
 
+    async def afetch_xbrl(self, *, refresh: bool = False) -> DownloadResult:
+        """非同期で XBRL ZIP をダウンロードする。キャッシュがあればそれを使う。
+
+        TDnet で 403/404 の場合は JPX 永続 URL にフォールバックする。
+
+        Returns:
+            ダウンロード結果 (data, source_url)。
+        """
+        if not self.xbrl_url:
+            raise TdnetError("This filing has no XBRL data")
+
+        from tdnet.api import adownload_file_with_fallback
+
+        cache_key = self._cache_key()
+        store = _get_cache_store()
+
+        if store is not None and not refresh:
+            cached = store.get(cache_key)
+            if cached is not None:
+                return DownloadResult(data=cached, source_url=self.xbrl_url)
+
+        data, source_url = await adownload_file_with_fallback(
+            self.xbrl_url, self.company_code,
+        )
+
+        if store is not None:
+            store.put(cache_key, data)
+
+        return DownloadResult(data=data, source_url=source_url)
+
+    async def axbrl(
+        self,
+        *,
+        taxonomy_path: str | Path | None = None,
+        refresh: bool = False,
+    ) -> Statements:
+        """非同期で XBRL を解析し財務諸表コンテナを返す。
+
+        Returns:
+            Statements コンテナ。
+        """
+        from tdnet.xbrl.parser import parse_zip
+
+        result = await self.afetch_xbrl(refresh=refresh)
+
+        tp = taxonomy_path
+        if tp is None:
+            config = get_config()
+            tp = config.taxonomy_path
+
+        return parse_zip(
+            result.data,
+            taxonomy_path=tp,
+            entity_id=self.company_code,
+        )
+
+    async def afetch_pdf(self) -> DownloadResult:
+        """非同期で PDF をダウンロードする。
+
+        TDnet で 403/404 の場合は JPX 永続 URL にフォールバックする。
+
+        Raises:
+            TdnetError: PDF が存在しない、または取得したデータが PDF でない場合。
+
+        Returns:
+            ダウンロード結果 (data, source_url)。
+        """
+        if not self.document_url:
+            raise TdnetError("This filing has no PDF URL (document_url is empty)")
+
+        from tdnet.api import adownload_file_with_fallback
+
+        data, source_url = await adownload_file_with_fallback(
+            self.document_url, self.company_code,
+        )
+        if data[:5] == b"%PDF-":
+            return DownloadResult(data=data, source_url=source_url)
+
+        # document_url が PDF でなかった場合、xbrl_url からPDF URLを推測
+        if self.xbrl_url:
+            pdf_url_guess = self.xbrl_url.rsplit(".", 1)[0] + ".pdf"
+            if pdf_url_guess != self.document_url:
+                try:
+                    data2, source_url2 = await adownload_file_with_fallback(
+                        pdf_url_guess, self.company_code,
+                    )
+                    if data2[:5] == b"%PDF-":
+                        return DownloadResult(data=data2, source_url=source_url2)
+                except TdnetError:
+                    pass
+
+        raise TdnetError(
+            "PDF を取得できませんでした。"
+            "document_url が PDF ではなく、代替 URL からも取得できません。"
+        )
+
     def fetch_pdf(self) -> DownloadResult:
         """PDF をダウンロードする。
 

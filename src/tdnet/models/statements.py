@@ -14,6 +14,7 @@ from tdnet.models.types import LineItem
 
 if TYPE_CHECKING:
     import pandas as pd
+    from xbrl_core import CalculationLinkbase, DefinitionTree
 
 # TDnet タクソノミの名前空間
 _TSE_ED_NS = "http://www.xbrl.tdnet.info/taxonomy/jp/tse/tdnet/ed/t/2014-01-12"
@@ -79,10 +80,14 @@ class Statements:
         *,
         entity_id: str = "",
         warnings: tuple[str, ...] = (),
+        definition_linkbase: dict[str, DefinitionTree] | None = None,
+        calculation_linkbase: CalculationLinkbase | None = None,
     ) -> None:
         self._items = items
         self._entity_id = entity_id
         self._warnings = warnings
+        self._definition_linkbase = definition_linkbase
+        self._calculation_linkbase = calculation_linkbase
 
     def _filter_items(
         self,

@@ -62,7 +62,7 @@ from tdnet import list_by_range
 items = list_by_range("20260301", "20260305", has_xbrl=True)
 ```
 
-データソースは [やのしんWEB-API](https://webapi.yanoshin.jp/) をデフォルトで使用します。`source="scrape"` で release.tdnet.info の直接スクレイピングも可能です。
+データソースは [やのしんWEB-API](https://webapi.yanoshin.jp/) をデフォルトで使用します。やのしん API が利用できない場合（ネットワークエラー・サーバーエラー）は release.tdnet.info のスクレイピングに自動フォールバックします。`source="scrape"` で直接スクレイピングを指定することもできます。
 
 ## Filing
 
@@ -81,13 +81,17 @@ print(f.doc_id)         # '575305'
 stmts = f.xbrl()
 
 # XBRL ZIP の生バイト取得（キャッシュ対応）
-zip_data = f.fetch_xbrl()
+result = f.fetch_xbrl()
+result.data        # bytes: ZIP データ
+result.source_url  # str: 実際にダウンロードした URL
 
 # PDF 取得
-pdf_data = f.fetch_pdf()
+result = f.fetch_pdf()
+result.data        # bytes: PDF データ
+result.source_url  # str: 実際にダウンロードした URL
 ```
 
-> XBRL / PDF は公開後 2-3 営業日で 403 になります。日次バッチでの取得を推奨します。
+> XBRL / PDF は release.tdnet.info 上で約 30-40 日で削除されます。期限切れの場合は JPX の永続 URL (`www2.jpx.co.jp`) に自動フォールバックします。`source_url` でどちらから取得したか確認できます。
 
 ## 正規化キー（CK）による値取得
 
@@ -283,16 +287,20 @@ for item in pl:
 
 ## パイプラインマッパー
 
-デフォルトのマッパーパイプラインは `[dividend_mapper, forecast_mapper, summary_mapper, statement_mapper]` です。
+デフォルトのマッパーパイプラインは以下の 6 マッパーです。
 
-| マッパー | 対象 | 概念数 |
-|:---|:---|:---|
-| `dividend_mapper` | 配当（DPS）、AnnualDividendPaymentScheduleAxis 対応 | — |
-| `forecast_mapper` | 業績予想（ResultForecastAxis=ForecastMember） | — |
-| `summary_mapper` | tse-ed-t サマリー科目（経営指標） | 230+ (XSD検証済) |
-| `statement_mapper` | jppfs_cor / IFRS / US-GAAP / REIT PL/BS/CF 本体 | 190+ |
+| 順位 | マッパー | 対象 | 概念数 |
+|:---|:---|:---|:---|
+| 1 | `dividend_mapper` | 配当（DPS）、AnnualDividendPaymentScheduleAxis 対応 | — |
+| 2 | `forecast_mapper` | 業績予想（ResultForecastAxis=ForecastMember） | — |
+| 3 | `summary_mapper` | tse-ed-t サマリー科目（経営指標） | 230+ (XSD検証済) |
+| 4 | `statement_mapper` | jppfs_cor / IFRS / US-GAAP / REIT PL/BS/CF 本体 | 190+ |
+| 5 | `definition_mapper()` | Definition Linkbase の general-special で独自科目 → 標準科目に遡上 | 動的 |
+| 6 | `calc_mapper()` | Calculation Linkbase の summation-item で独自科目 → 親標準科目に遡上 | 動的 |
 
 先頭のマッパーほど高優先。1 アイテムに対して最初にマッチしたマッパーが採用されます。
+
+`definition_mapper()` / `calc_mapper()` はリンクベースデータが `Statements` に設定されている場合に機能します。TDnet の決算短信 ZIP にはリンクベースが同梱されないため、デフォルトでは何もマッチしません（既存動作に影響なし）。外部から取得したリンクベースを渡す場合は `Statements` の `definition_linkbase` / `calculation_linkbase` パラメータを使用してください。
 
 ### カスタムマッパーの追加
 
@@ -323,6 +331,25 @@ def my_mapper(item: LineItem, ctx: MapperContext) -> str | None:
     if item.local_name == "SpecialConcept":
         return "my_special_key"
     return None
+```
+
+### リンクベースマッパーのカスタム lookup 注入
+
+`definition_mapper()` と `calc_mapper()` は `lookup` 引数で名寄せ先の辞書を注入できます。内蔵の CK を使わず、独自の名寄せ体系で完結させることが可能です。
+
+```python
+from tdnet import definition_mapper, calc_mapper, dict_mapper, extract_values
+
+# 独自の名寄せ辞書
+my_map = {"NetSales": "売上高", "OperatingIncome": "営業利益", "CostOfSales": "売上原価"}
+
+pipeline = [
+    dict_mapper(my_map),                     # 辞書完全一致
+    definition_mapper(lookup=my_map.get),     # def linkbase で祖先を辿り → my_map で解決
+    calc_mapper(lookup=my_map.get),           # calc linkbase で祖先を辿り → my_map で解決
+]
+
+result = extract_values(stmts, ["売上高", "営業利益"], mapper=pipeline)
 ```
 
 ## pandas 連携
@@ -511,7 +538,7 @@ except TdnetError as e:
 - **配当 (DPS)**: 常に `consolidated=False` で取得してください
 - **非連結決算**: `consolidated=False` を指定（`True` だと 0 件）
 - **銀行・保険**: `CK.ORDINARY_REVENUE_BANKING` 等の業種固有 CK を使用
-- **XBRL/PDF の公開期限**: 公開後 2-3 営業日で 403。日次バッチ取得を推奨
+- **XBRL/PDF の公開期限**: release.tdnet.info 上で約 30-40 日で削除。期限切れ時は JPX 永続 URL に自動フォールバック
 - **タクソノミ**: tse-ed-t (2014-01-12) をパッケージに同梱済み。設定不要
 
 ## 動作要件

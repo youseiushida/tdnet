@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from tdnet.api import _parse_list_html, _parse_search_html
+import pytest
+
+from tdnet.api import (
+    _build_jpx_url,
+    _parse_list_html,
+    _parse_search_html,
+    download_file_with_fallback,
+)
+from tdnet.exceptions import TdnetAPIError, TdnetError
 
 
 # ============================================================
@@ -308,3 +316,113 @@ class TestParseSearchHtml:
         items = _parse_search_html(html)
         assert len(items) == 1
         assert items[0]["company_name"] == "トヨタ自動車"
+
+
+# ============================================================
+# _build_jpx_url
+# ============================================================
+
+
+class TestBuildJpxUrl:
+    """JPX 永続 URL ビルダーのテスト。"""
+
+    def test_basic(self):
+        """TDnet URL を JPX URL に変換する。"""
+        tdnet = "https://www.release.tdnet.info/inbs/140120260127539586.pdf"
+        result = _build_jpx_url(tdnet, "37760")
+        assert result == "https://www2.jpx.co.jp/disc/37760/140120260127539586.pdf"
+
+    def test_zip(self):
+        """ZIP ファイルでも同様に変換する。"""
+        tdnet = "https://www.release.tdnet.info/inbs/081220260128540006.zip"
+        result = _build_jpx_url(tdnet, "45520")
+        assert result == "https://www2.jpx.co.jp/disc/45520/081220260128540006.zip"
+
+
+# ============================================================
+# download_file_with_fallback
+# ============================================================
+
+
+class TestDownloadFileWithFallback:
+    """JPX フォールバック付きダウンロードのテスト。"""
+
+    def test_tdnet_success_no_fallback(self, monkeypatch):
+        """TDnet が成功すればフォールバックしない。"""
+        import tdnet.api as api_mod
+
+        monkeypatch.setattr(api_mod, "download_file", lambda url: b"ok")
+
+        data, source_url = download_file_with_fallback(
+            "https://www.release.tdnet.info/inbs/test.pdf", "12340",
+        )
+        assert data == b"ok"
+        assert source_url == "https://www.release.tdnet.info/inbs/test.pdf"
+
+    def test_fallback_on_404(self, monkeypatch):
+        """TDnet 404 で JPX にフォールバックする。"""
+        import tdnet.api as api_mod
+
+        call_urls: list[str] = []
+
+        def fake_download(url: str) -> bytes:
+            call_urls.append(url)
+            if "release.tdnet.info" in url:
+                raise TdnetAPIError(404, "Not Found")
+            return b"jpx-data"
+
+        monkeypatch.setattr(api_mod, "download_file", fake_download)
+
+        data, source_url = download_file_with_fallback(
+            "https://www.release.tdnet.info/inbs/test.pdf", "12340",
+        )
+        assert data == b"jpx-data"
+        assert source_url == "https://www2.jpx.co.jp/disc/12340/test.pdf"
+        assert len(call_urls) == 2
+
+    def test_fallback_on_403(self, monkeypatch):
+        """TDnet 403 でも JPX にフォールバックする。"""
+        import tdnet.api as api_mod
+
+        def fake_download(url: str) -> bytes:
+            if "release.tdnet.info" in url:
+                raise TdnetAPIError(403, "Forbidden")
+            return b"jpx-data"
+
+        monkeypatch.setattr(api_mod, "download_file", fake_download)
+
+        data, source_url = download_file_with_fallback(
+            "https://www.release.tdnet.info/inbs/test.pdf", "12340",
+        )
+        assert data == b"jpx-data"
+        assert "jpx.co.jp" in source_url
+
+    def test_no_fallback_on_500(self, monkeypatch):
+        """500 エラーはフォールバックせず例外を投げる。"""
+        import tdnet.api as api_mod
+
+        monkeypatch.setattr(
+            api_mod, "download_file",
+            lambda url: (_ for _ in ()).throw(TdnetAPIError(500, "Server Error")),
+        )
+
+        with pytest.raises(TdnetAPIError, match="500"):
+            download_file_with_fallback(
+                "https://www.release.tdnet.info/inbs/test.pdf", "12340",
+            )
+
+    def test_jpx_also_fails_raises(self, monkeypatch):
+        """JPX もダウンロード失敗なら例外を投げる。"""
+        import tdnet.api as api_mod
+
+        def fake_download(url: str) -> bytes:
+            if "release.tdnet.info" in url:
+                raise TdnetAPIError(404, "Not Found")
+            raise TdnetAPIError(404, "JPX Not Found")
+
+        monkeypatch.setattr(api_mod, "download_file", fake_download)
+
+        with pytest.raises(TdnetAPIError, match="JPX Not Found"):
+            download_file_with_fallback(
+                "https://www.release.tdnet.info/inbs/test.pdf", "12340",
+            )

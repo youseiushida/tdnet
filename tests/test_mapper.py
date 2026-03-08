@@ -8,6 +8,9 @@ import pytest
 
 from tdnet.mapper import (
     MapperContext,
+    build_parent_index,
+    calc_mapper,
+    definition_mapper,
     dict_mapper,
     dividend_mapper,
     forecast_mapper,
@@ -235,21 +238,132 @@ class TestDefaultPipeline:
     """デフォルトパイプラインのテスト。"""
 
     def test_pipeline_length(self):
-        """4 つのマッパーが含まれる。"""
+        """6 つのマッパーが含まれる。"""
         pipeline = get_default_pipeline()
-        assert len(pipeline) == 4
+        assert len(pipeline) == 6
 
     def test_pipeline_order(self):
-        """dividend → forecast → summary → statement の順。"""
+        """dividend → forecast → summary → statement → definition → calc の順。"""
         pipeline = get_default_pipeline()
         assert pipeline[0] is dividend_mapper
         assert pipeline[1] is forecast_mapper
         assert pipeline[2] is summary_mapper
         assert pipeline[3] is statement_mapper
+        # definition_mapper() と calc_mapper() はファクトリ生成なので名前で確認
+        assert pipeline[4].__name__ == "definition_mapper"
+        assert pipeline[5].__name__ == "calc_mapper"
 
     def test_pipeline_returns_new_list(self):
         """毎回新しいリストが返される。"""
         p1 = get_default_pipeline()
         p2 = get_default_pipeline()
-        assert p1 == p2
         assert p1 is not p2
+
+
+# ============================================================
+# definition_mapper
+# ============================================================
+
+
+class TestDefinitionMapper:
+    """Definition Linkbase マッパーのテスト。"""
+
+    def test_no_index_returns_none(self):
+        """definition_parent_index が空なら常に None。"""
+        mapper = definition_mapper()
+        item = make_item("CustomRevenue", Decimal("1000"))
+        assert mapper(item, _CTX) is None
+
+    def test_resolves_via_parent_index(self):
+        """逆引きインデックスで祖先の CK を返す。"""
+        mapper = definition_mapper()
+        ctx = MapperContext(
+            entity_id="7203",
+            definition_parent_index={"CustomRevenue": "NetSales"},
+        )
+        item = make_item("CustomRevenue", Decimal("1000"))
+        # NetSales → CK.REVENUE（statement_mappings 経由）
+        assert mapper(item, ctx) == CK.REVENUE
+
+    def test_ancestor_not_in_dictionary_returns_none(self):
+        """祖先が辞書にない場合は None。"""
+        mapper = definition_mapper()
+        ctx = MapperContext(
+            entity_id="7203",
+            definition_parent_index={"CustomConcept": "TotallyUnknownAncestor"},
+        )
+        item = make_item("CustomConcept", Decimal("100"))
+        assert mapper(item, ctx) is None
+
+    def test_custom_lookup(self):
+        """カスタム lookup 関数を注入できる。"""
+        my_lookup = {"NetSales": "MY_REVENUE"}
+        mapper = definition_mapper(lookup=my_lookup.get)
+        ctx = MapperContext(
+            entity_id="7203",
+            definition_parent_index={"CustomRevenue": "NetSales"},
+        )
+        item = make_item("CustomRevenue", Decimal("1000"))
+        assert mapper(item, ctx) == "MY_REVENUE"
+
+    def test_custom_lookup_miss_returns_none(self):
+        """カスタム lookup にない祖先は None。"""
+        my_lookup = {"OperatingIncome": "MY_OP_INCOME"}
+        mapper = definition_mapper(lookup=my_lookup.get)
+        ctx = MapperContext(
+            entity_id="7203",
+            definition_parent_index={"CustomRevenue": "NetSales"},
+        )
+        item = make_item("CustomRevenue", Decimal("1000"))
+        assert mapper(item, ctx) is None
+
+    def test_standard_concept_not_in_index_returns_none(self):
+        """逆引きインデックスにない概念は None。"""
+        mapper = definition_mapper()
+        ctx = MapperContext(
+            entity_id="7203",
+            definition_parent_index={"CustomRevenue": "NetSales"},
+        )
+        item = make_item("OperatingIncome", Decimal("500"))
+        assert mapper(item, ctx) is None
+
+
+# ============================================================
+# calc_mapper
+# ============================================================
+
+
+class TestCalcMapper:
+    """Calculation Linkbase マッパーのテスト。"""
+
+    def test_no_linkbase_returns_none(self):
+        """calculation_linkbase が None なら常に None。"""
+        mapper = calc_mapper()
+        item = make_item("CustomExpense", Decimal("1000"))
+        assert mapper(item, _CTX) is None
+
+    def test_custom_lookup(self):
+        """カスタム lookup 関数を注入できる。"""
+        my_lookup = {"OperatingIncome": "MY_OP_INCOME"}
+        mapper = calc_mapper(lookup=my_lookup.get)
+        # calculation_linkbase が None なので None
+        item = make_item("SomeChild", Decimal("100"))
+        assert mapper(item, _CTX) is None
+
+    def test_mapper_name(self):
+        """生成されたマッパーの名前が正しい。"""
+        mapper = calc_mapper()
+        assert mapper.__name__ == "calc_mapper"
+
+
+# ============================================================
+# build_parent_index
+# ============================================================
+
+
+class TestBuildParentIndex:
+    """build_parent_index のテスト。"""
+
+    def test_none_returns_empty(self):
+        """None を渡すと空辞書。"""
+        assert build_parent_index(None) == {}

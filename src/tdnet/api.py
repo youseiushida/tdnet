@@ -10,7 +10,7 @@ from datetime import date
 
 from tdnet._config import get_config
 from tdnet._http import get, post
-from tdnet.exceptions import TdnetParseError
+from tdnet.exceptions import TdnetAPIError, TdnetParseError
 
 logger = logging.getLogger(__name__)
 
@@ -183,10 +183,54 @@ def _text(element) -> str:
 # ファイルダウンロード
 # ============================================================
 
+_JPX_BASE_URL = "https://www2.jpx.co.jp/disc"
+
+
+def _build_jpx_url(tdnet_url: str, company_code: str) -> str:
+    """release.tdnet.info の URL を JPX 永続 URL に変換する。
+
+    Args:
+        tdnet_url: release.tdnet.info のファイル URL。
+        company_code: 証券コード (5桁)。
+
+    Returns:
+        JPX の永続 URL。
+    """
+    filename = tdnet_url.rsplit("/", 1)[-1]
+    return f"{_JPX_BASE_URL}/{company_code}/{filename}"
+
+
 def download_file(url: str) -> bytes:
     """URL からファイルをダウンロードする。"""
     response = get(url)
     return response.content
+
+
+def download_file_with_fallback(
+    url: str,
+    company_code: str,
+) -> tuple[bytes, str]:
+    """ファイルをダウンロードする。TDnet で 403/404 の場合は JPX にフォールバックする。
+
+    Args:
+        url: ダウンロード URL (release.tdnet.info)。
+        company_code: 証券コード (5桁)。
+
+    Returns:
+        (ファイルデータ, 実際にダウンロードした URL) のタプル。
+    """
+    try:
+        data = download_file(url)
+        return data, url
+    except TdnetAPIError as exc:
+        if exc.status_code not in (403, 404):
+            raise
+        status_code = exc.status_code
+
+    jpx_url = _build_jpx_url(url, company_code)
+    logger.info("TDnet %d, JPX にフォールバック: %s", status_code, jpx_url)
+    data = download_file(jpx_url)
+    return data, jpx_url
 
 
 def download_xbrl(url: str) -> bytes:

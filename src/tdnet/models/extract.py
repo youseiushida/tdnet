@@ -28,6 +28,7 @@ from tdnet.models.types import LineItem
 from tdnet.mapper import (
     ConceptMapper,
     MapperContext,
+    build_parent_index,
     get_default_pipeline,
 )
 from tdnet.models.ck import CK
@@ -273,6 +274,10 @@ def extract_values(
     # MapperContext 構築
     ctx = MapperContext(
         entity_id=source._entity_id,
+        definition_parent_index=build_parent_index(
+            source._definition_linkbase,
+        ),
+        calculation_linkbase=source._calculation_linkbase,
     )
 
     # キーフィルタ

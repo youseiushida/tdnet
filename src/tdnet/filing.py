@@ -15,6 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
+class DownloadResult:
+    """ダウンロード結果。
+
+    Attributes:
+        data: ダウンロードしたファイルデータ。
+        source_url: 実際にダウンロードした URL。
+            TDnet から取得した場合は元の URL、
+            JPX にフォールバックした場合は JPX の永続 URL。
+    """
+
+    data: bytes
+    source_url: str
+
+
+@dataclass(frozen=True, slots=True)
 class Filing:
     """TDnet の開示書類 1 件。"""
 
@@ -45,12 +60,18 @@ class Filing:
             return stem[12:]  # DOCID 部分
         return stem
 
-    def fetch_xbrl(self, *, refresh: bool = False) -> bytes:
-        """XBRL ZIP をダウンロードする。キャッシュがあればそれを使う。"""
+    def fetch_xbrl(self, *, refresh: bool = False) -> DownloadResult:
+        """XBRL ZIP をダウンロードする。キャッシュがあればそれを使う。
+
+        TDnet で 403/404 の場合は JPX 永続 URL にフォールバックする。
+
+        Returns:
+            ダウンロード結果 (data, source_url)。
+        """
         if not self.xbrl_url:
             raise TdnetError("This filing has no XBRL data")
 
-        from tdnet.api import download_xbrl
+        from tdnet.api import download_file_with_fallback
 
         cache_key = self._cache_key()
         store = _get_cache_store()
@@ -58,14 +79,16 @@ class Filing:
         if store is not None and not refresh:
             cached = store.get(cache_key)
             if cached is not None:
-                return cached
+                return DownloadResult(data=cached, source_url=self.xbrl_url)
 
-        data = download_xbrl(self.xbrl_url)
+        data, source_url = download_file_with_fallback(
+            self.xbrl_url, self.company_code,
+        )
 
         if store is not None:
             store.put(cache_key, data)
 
-        return data
+        return DownloadResult(data=data, source_url=source_url)
 
     def xbrl(self, *, taxonomy_path: str | Path | None = None, refresh: bool = False) -> Statements:
         """XBRL を解析し財務諸表コンテナを返す。
@@ -76,7 +99,7 @@ class Filing:
         """
         from tdnet.xbrl.parser import parse_zip
 
-        zip_data = self.fetch_xbrl(refresh=refresh)
+        result = self.fetch_xbrl(refresh=refresh)
 
         tp = taxonomy_path
         if tp is None:
@@ -84,25 +107,32 @@ class Filing:
             tp = config.taxonomy_path
 
         return parse_zip(
-            zip_data,
+            result.data,
             taxonomy_path=tp,
             entity_id=self.company_code,
         )
 
-    def fetch_pdf(self) -> bytes:
+    def fetch_pdf(self) -> DownloadResult:
         """PDF をダウンロードする。
+
+        TDnet で 403/404 の場合は JPX 永続 URL にフォールバックする。
 
         Raises:
             TdnetError: PDF が存在しない、または取得したデータが PDF でない場合。
+
+        Returns:
+            ダウンロード結果 (data, source_url)。
         """
         if not self.document_url:
             raise TdnetError("This filing has no PDF URL (document_url is empty)")
 
-        from tdnet.api import download_file
+        from tdnet.api import download_file_with_fallback
 
-        data = download_file(self.document_url)
+        data, source_url = download_file_with_fallback(
+            self.document_url, self.company_code,
+        )
         if data[:5] == b"%PDF-":
-            return data
+            return DownloadResult(data=data, source_url=source_url)
 
         # document_url が PDF でなかった場合、xbrl_url からPDF URLを推測
         if self.xbrl_url:
@@ -110,9 +140,11 @@ class Filing:
             pdf_url_guess = self.xbrl_url.rsplit(".", 1)[0] + ".pdf"
             if pdf_url_guess != self.document_url:
                 try:
-                    data2 = download_file(pdf_url_guess)
+                    data2, source_url2 = download_file_with_fallback(
+                        pdf_url_guess, self.company_code,
+                    )
                     if data2[:5] == b"%PDF-":
-                        return data2
+                        return DownloadResult(data=data2, source_url=source_url2)
                 except TdnetError:
                     pass
 

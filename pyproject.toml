@@ -21,7 +21,11 @@ path = "src/tdnet/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tdnet"]
 
+[tool.pytest.ini_options]
+markers = ["e2e: end-to-end tests requiring network access"]
+
 [dependency-groups]
 dev = [
+    "mypy>=1.19.1",
     "pytest>=9.0.2",
 ]

@@ -379,14 +379,23 @@ bs_df = stmts.balance_sheet().to_dataframe(full=True)  # 全カラム
 `tdnet.extension` を使うと、Filing + Statements を Parquet に書き出し・読み戻しできます。過去データの蓄積や横断比較に便利です。
 
 ```python
-from tdnet.extension import to_parquet, from_parquet
+import tdnet
+from tdnet import CK, extract_values, extracted_to_dict
+from tdnet.extension import export_parquet, import_parquet
 
-# 保存: (Filing, Statements | None) のリストを渡す
-pairs = [(f, f.xbrl()) for f in filings]
-to_parquet(pairs, "./data/2026Q1")
+filings = tdnet.documents("20260304", has_xbrl=True)
 
-# 復元: Filing + Statements がそのまま戻る
-restored = from_parquet("./data/2026Q1")
+# XBRL 付きはパース、なければ None
+pairs = [
+    (f, f.xbrl() if f.has_xbrl else None)
+    for f in filings
+]
+
+# 保存
+export_parquet(pairs, "./data")
+
+# 復元
+restored = import_parquet("./data")
 for filing, stmts in restored:
     if stmts is None:
         continue
@@ -398,7 +407,17 @@ for filing, stmts in restored:
 
 出力ファイルは `filings.parquet`（メタデータ）と `line_items.parquet`（全 LineItem）の 2 ファイルです。復元後の `Statements` は `income_statement()` / `extract_values()` / `search()` 等すべてのメソッドがそのまま動作します。
 
-> Statements=None の Filing（XBRL なし等）も混在して保存できます。
+### prefix で日付別にファイルを分ける
+
+`prefix` を指定すると、ファイル名の先頭に文字列を付与できます。同一ディレクトリに複数日分を保存する場合に便利です。
+
+```python
+export_parquet(pairs, "./data", prefix="2026-03-04_")
+# → ./data/2026-03-04_filings.parquet
+# → ./data/2026-03-04_line_items.parquet
+
+restored = import_parquet("./data", prefix="2026-03-04_")
+```
 
 ## 複数銘柄の一括処理
 

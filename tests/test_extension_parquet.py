@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from xbrl_core.periods import DurationPeriod, InstantPeriod
 
-from tdnet.extension import from_parquet, to_parquet
+from tdnet.extension import export_parquet, import_parquet
 from tdnet.filing import Filing
 from tdnet.models.statements import Statements
 from tdnet.models.types import LabelSource
@@ -42,8 +42,8 @@ class TestRoundTripEmpty:
 
     def test_empty_list(self, tmp_path):
         """空リストを保存・復元できる。"""
-        to_parquet([], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([], tmp_path)
+        result = import_parquet(tmp_path)
         assert result == []
 
 
@@ -53,8 +53,8 @@ class TestRoundTripFilingOnly:
     def test_filing_without_statements(self, tmp_path):
         """Statements=None で保存・復元できる。"""
         filing = _make_filing()
-        to_parquet([(filing, None)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, None)], tmp_path)
+        result = import_parquet(tmp_path)
 
         assert len(result) == 1
         restored_filing, restored_stmts = result[0]
@@ -78,8 +78,8 @@ class TestRoundTripWithStatements:
         )
         stmts = Statements(items=items, entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         assert len(result) == 1
         _, restored_stmts = result[0]
@@ -105,8 +105,8 @@ class TestRoundTripWithStatements:
             entity_id="6758",
         )
 
-        to_parquet([(f1, s1), (f2, s2)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(f1, s1), (f2, s2)], tmp_path)
+        result = import_parquet(tmp_path)
 
         assert len(result) == 2
         assert result[0][0].company_code == "7203"
@@ -124,8 +124,8 @@ class TestRoundTripValue:
         item = make_item("NetSales", Decimal("12345678.0"))
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert isinstance(restored_item.value, Decimal)
@@ -137,8 +137,8 @@ class TestRoundTripValue:
         item = make_item("SomeText", "テスト文字列", unit_ref=None, decimals=None)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.value == "テスト文字列"
@@ -149,8 +149,8 @@ class TestRoundTripValue:
         item = make_item("NilItem", None, is_nil=True, unit_ref=None, decimals=None)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.value is None
@@ -166,8 +166,8 @@ class TestRoundTripDecimals:
         item = make_item("NetSales", Decimal("100"), decimals=-6)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.decimals == -6
@@ -181,8 +181,8 @@ class TestRoundTripDecimals:
         item = replace(base, decimals="INF")
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.decimals == "INF"
@@ -193,8 +193,8 @@ class TestRoundTripDecimals:
         item = make_item("TextItem", "text", decimals=None, unit_ref=None)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.decimals is None
@@ -210,8 +210,8 @@ class TestRoundTripPeriod:
         item = make_item("NetSales", Decimal("100"), period=period)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert isinstance(restored_item.period, DurationPeriod)
@@ -225,8 +225,8 @@ class TestRoundTripPeriod:
         item = make_item("TotalAssets", Decimal("5000000"), period=period)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert isinstance(restored_item.period, InstantPeriod)
@@ -242,8 +242,8 @@ class TestRoundTripDimensions:
         item = make_item("NetSales", Decimal("100"), dimensions=())
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.dimensions == ()
@@ -255,8 +255,8 @@ class TestRoundTripDimensions:
         item = make_item("NetSales", Decimal("100"), dimensions=dims)
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert len(restored_item.dimensions) == 2
@@ -275,8 +275,8 @@ class TestRoundTripLabel:
         item = make_item("NetSales", Decimal("100"), label_ja="売上高", label_en="Net Sales")
         stmts = Statements(items=(item,), entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert restored_item.label_ja.text == "売上高"
@@ -307,8 +307,8 @@ class TestBehavior:
         )
         stmts = Statements(items=items, entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_stmts = result[0][1]
         assert restored_stmts is not None
@@ -328,8 +328,8 @@ class TestBehavior:
         )
         stmts = Statements(items=items, entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_stmts = result[0][1]
         assert restored_stmts is not None
@@ -352,8 +352,8 @@ class TestBehavior:
         )
         stmts = Statements(items=items, entity_id="7203")
 
-        to_parquet([(filing, stmts)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_stmts = result[0][1]
         assert restored_stmts is not None
@@ -363,9 +363,121 @@ class TestBehavior:
     def test_doc_id_property(self, tmp_path):
         """復元後の Filing.doc_id が正しい。"""
         filing = _make_filing()
-        to_parquet([(filing, None)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(filing, None)], tmp_path)
+        result = import_parquet(tmp_path)
 
         restored_filing = result[0][0]
         assert restored_filing.doc_id == filing.doc_id
         assert restored_filing.doc_id != ""
+
+
+class TestPrefix:
+    """prefix パラメータの動作。"""
+
+    def test_prefix_creates_prefixed_files(self, tmp_path):
+        """prefix 付きファイルが生成される。"""
+        filing = _make_filing()
+        item = make_item("NetSales", Decimal("100"), label_ja="売上高")
+        stmts = Statements(items=(item,), entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path, prefix="2026-03-04_")
+
+        assert (tmp_path / "2026-03-04_filings.parquet").exists()
+        assert (tmp_path / "2026-03-04_line_items.parquet").exists()
+        assert not (tmp_path / "filings.parquet").exists()
+
+    def test_prefix_roundtrip(self, tmp_path):
+        """prefix 付きで往復できる。"""
+        filing = _make_filing()
+        item = make_item("NetSales", Decimal("100"), label_ja="売上高")
+        stmts = Statements(items=(item,), entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path, prefix="test_")
+        result = import_parquet(tmp_path, prefix="test_")
+
+        assert len(result) == 1
+        assert result[0][0].company_code == "7203"
+        assert list(result[0][1])[0].local_name == "NetSales"  # type: ignore[union-attr]
+
+    def test_multiple_prefixes_coexist(self, tmp_path):
+        """異なる prefix のファイルが同一ディレクトリに共存できる。"""
+        f1 = _make_filing(company_code="7203")
+        f2 = _make_filing(company_code="6758")
+        s1 = Statements(
+            items=(make_item("NetSales", Decimal("100"), entity_id="7203"),),
+            entity_id="7203",
+        )
+        s2 = Statements(
+            items=(make_item("NetSales", Decimal("200"), entity_id="6758"),),
+            entity_id="6758",
+        )
+
+        export_parquet([(f1, s1)], tmp_path, prefix="day1_")
+        export_parquet([(f2, s2)], tmp_path, prefix="day2_")
+
+        r1 = import_parquet(tmp_path, prefix="day1_")
+        r2 = import_parquet(tmp_path, prefix="day2_")
+
+        assert len(r1) == 1
+        assert len(r2) == 1
+        assert r1[0][0].company_code == "7203"
+        assert r2[0][0].company_code == "6758"
+
+    def test_empty_prefix_is_default(self, tmp_path):
+        """prefix="" はデフォルト動作と同じ。"""
+        filing = _make_filing()
+        export_parquet([(filing, None)], tmp_path, prefix="")
+        result = import_parquet(tmp_path, prefix="")
+
+        assert len(result) == 1
+        assert (tmp_path / "filings.parquet").exists()
+
+
+class TestDeprecatedAliases:
+    """旧名 to_parquet / from_parquet の非推奨警告。"""
+
+    def test_to_parquet_warns(self, tmp_path):
+        """to_parquet() が DeprecationWarning を出す。"""
+        import warnings
+        from tdnet.extension import to_parquet
+
+        filing = _make_filing()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            to_parquet([(filing, None)], tmp_path)
+
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any("export_parquet" in str(x.message) for x in w)
+
+    def test_from_parquet_warns(self, tmp_path):
+        """from_parquet() が DeprecationWarning を出す。"""
+        import warnings
+        from tdnet.extension import from_parquet
+
+        filing = _make_filing()
+        export_parquet([(filing, None)], tmp_path)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = from_parquet(tmp_path)
+
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any("import_parquet" in str(x.message) for x in w)
+        assert len(result) == 1
+
+    def test_deprecated_still_works(self, tmp_path):
+        """旧名でも正しく往復できる。"""
+        import warnings
+        from tdnet.extension import from_parquet, to_parquet
+
+        filing = _make_filing()
+        item = make_item("NetSales", Decimal("100"))
+        stmts = Statements(items=(item,), entity_id="7203")
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            to_parquet([(filing, stmts)], tmp_path)
+            result = from_parquet(tmp_path)
+
+        assert len(result) == 1
+        assert list(result[0][1])[0].local_name == "NetSales"  # type: ignore[union-attr]

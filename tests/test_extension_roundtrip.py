@@ -13,7 +13,7 @@ from decimal import Decimal
 from xbrl_core import DimensionMember
 from xbrl_core.periods import DurationPeriod, InstantPeriod
 
-from tdnet.extension import from_parquet, to_parquet
+from tdnet.extension import export_parquet, import_parquet
 from tdnet.filing import Filing
 from tdnet.mapper import dict_mapper, summary_mapper, statement_mapper
 from tdnet.models.ck import CK
@@ -337,8 +337,8 @@ def _roundtrip(
     tmp_path: object,
 ) -> tuple[Filing, Statements | None]:
     """to_parquet → from_parquet の往復を行い復元結果を返す。"""
-    to_parquet([(filing, stmts)], tmp_path)  # type: ignore[arg-type]
-    result = from_parquet(tmp_path)  # type: ignore[arg-type]
+    export_parquet([(filing, stmts)], tmp_path)  # type: ignore[arg-type]
+    result = import_parquet(tmp_path)  # type: ignore[arg-type]
     assert len(result) == 1
     return result[0]
 
@@ -736,8 +736,8 @@ class TestMultipleFilings:
             entity_id="6758",
         )
 
-        to_parquet([(f1, s1), (f2, s2)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(f1, s1), (f2, s2)], tmp_path)
+        result = import_parquet(tmp_path)
 
         assert len(result) == 2
         r1_filing, r1_stmts = result[0]
@@ -760,8 +760,8 @@ class TestMultipleFilings:
             entity_id="0002",
         )
 
-        to_parquet([(f1, None), (f2, s2), (f3, None)], tmp_path)
-        result = from_parquet(tmp_path)
+        export_parquet([(f1, None), (f2, s2), (f3, None)], tmp_path)
+        result = import_parquet(tmp_path)
 
         assert len(result) == 3
         assert result[0][1] is None

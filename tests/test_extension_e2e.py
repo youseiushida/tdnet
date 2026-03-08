@@ -14,7 +14,7 @@ import pytest
 
 import tdnet
 from tdnet import CK, extract_values, extracted_to_dict
-from tdnet.extension import from_parquet, to_parquet
+from tdnet.extension import export_parquet, import_parquet
 from tdnet.filing import Filing
 from tdnet.mapper import dict_mapper, statement_mapper, summary_mapper
 from tdnet.models.statements import Statements
@@ -56,8 +56,8 @@ def e2e_data(tmp_path_factory):
         (f, s) for f, s in pairs
     ]
 
-    to_parquet(data, tmp)
-    restored = from_parquet(tmp)
+    export_parquet(data, tmp)
+    restored = import_parquet(tmp)
 
     return {
         "originals": pairs,

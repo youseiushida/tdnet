@@ -89,6 +89,11 @@ result.source_url  # str: 実際にダウンロードした URL
 result = f.fetch_pdf()
 result.data        # bytes: PDF データ
 result.source_url  # str: 実際にダウンロードした URL
+
+# async 版（asyncio.gather で並行処理可能）
+stmts = await f.axbrl()
+result = await f.afetch_xbrl()
+result = await f.afetch_pdf()
 ```
 
 > XBRL / PDF は release.tdnet.info 上で約 30-40 日で削除されます。期限切れの場合は JPX の永続 URL (`www2.jpx.co.jp`) に自動フォールバックします。`source_url` でどちらから取得したか確認できます。
@@ -388,6 +393,30 @@ for f in filings:
     )
     row = extracted_to_dict(result)
     print(f"{f.company_code} {f.company_name}: 売上={row.get(CK.REVENUE)}")
+```
+
+### 非同期 (async) での一括処理
+
+`Filing` は async メソッド (`axbrl()`, `afetch_xbrl()`, `afetch_pdf()`) を提供しています。`asyncio.gather()` で並行ダウンロード・パースが可能です。
+
+```python
+import asyncio
+import tdnet
+from tdnet import CK, extract_values, extracted_to_dict
+
+async def main():
+    filings = tdnet.documents("20260304", has_xbrl=True)
+
+    # 全件を並行ダウンロード＋パース
+    stmts_list = await asyncio.gather(*[f.axbrl() for f in filings])
+
+    for f, stmts in zip(filings, stmts_list):
+        row = extracted_to_dict(
+            extract_values(stmts, [CK.REVENUE], period="current", consolidated=True)
+        )
+        print(f"{f.company_code}: {row.get(CK.REVENUE)}")
+
+asyncio.run(main())
 ```
 
 ## TDnet 検索

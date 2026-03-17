@@ -1,0 +1,10 @@
+TDnet ダンプパイプライン 結果レポート
+期間: 2025-03-01 〜 2025-03-07
+出力先: /mnt/c/Users/nezow/Documents/tdnet/parquet/tdnet
+
+書類数: 1207
+XBRL 成功: 70/70
+エラー: 0
+時間: 46.4s
+メモリ peak: 36.4 MB
+ファイルサイズ: 2.5 MB

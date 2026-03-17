@@ -28,7 +28,7 @@ class TestConfigure:
         config = get_config()
         assert config.timeout == 30.0
         assert config.max_retries == 3
-        assert config.rate_limit == 1.0
+        assert config.rate_limit == 0.0
         assert config.taxonomy_path is None
         assert config.cache_dir is None
 

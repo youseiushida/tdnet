@@ -18,7 +18,7 @@ class _Config:
     yanoshin_base_url: str = "https://webapi.yanoshin.jp/webapi/tdnet/list"
     timeout: float = 30.0
     max_retries: int = 3
-    rate_limit: float = 1.0  # TDnet には明文規定なし、安全側 1秒
+    rate_limit: float = 0.0  # リトライ・指数バックオフで制御、固定スリープ不要
     taxonomy_path: str | None = None
     cache_dir: str | None = None
 

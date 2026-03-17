@@ -88,8 +88,12 @@ def list_by_range(
     """期間指定で開示一覧を取得する。"""
     if isinstance(start_date, date):
         start_date = start_date.strftime("%Y%m%d")
+    else:
+        start_date = start_date.replace("-", "").replace("/", "")
     if isinstance(end_date, date):
         end_date = end_date.strftime("%Y%m%d")
+    else:
+        end_date = end_date.replace("-", "").replace("/", "")
     return _yanoshin_list(f"{start_date}-{end_date}", has_xbrl=has_xbrl, limit=limit)
 
 

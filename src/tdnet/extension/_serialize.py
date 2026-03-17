@@ -1,138 +1,203 @@
-"""Filing + Statements → DataFrame 変換。"""
+"""ドメインオブジェクト → dict 行（Parquet 行）への変換。"""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from xbrl_core import CalculationLinkbase
+    from xbrl_core.linkbase.definition import DefinitionTree
+
     from tdnet.filing import Filing
-    from tdnet.models.statements import Statements
     from tdnet.models.types import LineItem
 
+_TEXTBLOCK_SUFFIX = "TextBlock"
 
-def _serialize_period(item: LineItem) -> dict[str, object]:
-    """LineItem の period を Parquet 用のカラムに変換する。"""
-    from xbrl_core.periods import InstantPeriod, DurationPeriod
 
-    period = item.period
-    if isinstance(period, InstantPeriod):
-        return {
-            "period_type": "instant",
-            "period_instant": period.instant,
-            "period_start": None,
-            "period_end": None,
-        }
-    if isinstance(period, DurationPeriod):
-        return {
-            "period_type": "duration",
-            "period_instant": None,
-            "period_start": period.start_date,
-            "period_end": period.end_date,
-        }
+def is_text_block(local_name: str) -> bool:
+    """TextBlock 系の Fact かどうかを判定する。
+
+    Args:
+        local_name: 概念のローカル名。
+
+    Returns:
+        ``True`` なら TextBlock。
+    """
+    return local_name.endswith(_TEXTBLOCK_SUFFIX)
+
+
+def serialize_filing(
+    filing: Filing,
+    has_xbrl: bool,
+) -> dict[str, Any]:
+    """Filing 1 件を行辞書に変換する。
+
+    Args:
+        filing: 変換対象の Filing。
+        has_xbrl: XBRL パースに成功したかどうか。
+
+    Returns:
+        filings.parquet 用の行辞書。
+    """
     return {
-        "period_type": "unknown",
-        "period_instant": None,
-        "period_start": None,
-        "period_end": None,
+        "doc_id": filing.doc_id,
+        "pubdate": filing.pubdate,
+        "company_code": filing.company_code,
+        "company_name": filing.company_name,
+        "title": filing.title,
+        "document_url": filing.document_url,
+        "xbrl_url": filing.xbrl_url,
+        "markets_string": filing.markets_string,
+        "has_xbrl": has_xbrl,
     }
 
 
-def _serialize_dimensions(item: LineItem) -> str:
-    """dimensions を JSON 文字列に変換する。"""
-    if not item.dimensions:
-        return "[]"
-    return json.dumps(
-        [{"axis": d.axis, "member": d.member} for d in item.dimensions],
-        ensure_ascii=False,
-    )
-
-
-def _serialize_value(item: LineItem) -> dict[str, object]:
-    """value を numeric / text カラムに分離する。"""
-    if isinstance(item.value, Decimal):
-        return {"value_numeric": float(item.value), "value_text": None}
-    if isinstance(item.value, str):
-        return {"value_numeric": None, "value_text": item.value}
-    return {"value_numeric": None, "value_text": None}
-
-
-def _serialize_decimals(item: LineItem) -> dict[str, object]:
-    """decimals を int / is_inf カラムに分離する。"""
-    if item.decimals == "INF":
-        return {"decimals_int": None, "decimals_is_inf": True}
-    if isinstance(item.decimals, int):
-        return {"decimals_int": item.decimals, "decimals_is_inf": False}
-    return {"decimals_int": None, "decimals_is_inf": False}
-
-
-def _filing_rows(
-    data: Sequence[tuple[Filing, Statements | None]],
-) -> list[dict[str, object]]:
-    """Filing のリストを行辞書のリストに変換する。
+def serialize_line_item(
+    item: LineItem,
+    doc_id: str,
+) -> dict[str, Any]:
+    """LineItem 1 件を行辞書に変換する。
 
     Args:
-        data: (Filing, Statements | None) のシーケンス。
+        item: 変換対象の LineItem。
+        doc_id: 対応する Filing の doc_id。
 
     Returns:
-        filings.parquet 用の行辞書リスト。
+        line_items.parquet / text_blocks.parquet 用の行辞書。
     """
-    rows: list[dict[str, object]] = []
-    for seq, (filing, stmts) in enumerate(data):
-        rows.append({
-            "_seq": seq,
-            "doc_id": filing.doc_id,
-            "pubdate": filing.pubdate,
-            "company_code": filing.company_code,
-            "company_name": filing.company_name,
-            "title": filing.title,
-            "document_url": filing.document_url,
-            "xbrl_url": filing.xbrl_url,
-            "markets_string": filing.markets_string,
-            "has_statements": stmts is not None,
-        })
+    from xbrl_core.periods import InstantPeriod
+
+    # value 型判別
+    if isinstance(item.value, Decimal):
+        value_numeric = str(item.value)
+        value_text = None
+        value_type = "decimal"
+    elif isinstance(item.value, str):
+        value_numeric = None
+        value_text = item.value
+        value_type = "str"
+    else:
+        value_numeric = None
+        value_text = None
+        value_type = "none"
+
+    # decimals
+    if item.decimals == "INF":
+        decimals_int = None
+        decimals_inf = True
+    elif item.decimals is not None:
+        decimals_int = item.decimals
+        decimals_inf = False
+    else:
+        decimals_int = None
+        decimals_inf = False
+
+    # period
+    period = item.period
+    if isinstance(period, InstantPeriod):
+        period_type = "instant"
+        period_instant = period.instant
+        period_start = None
+        period_end = None
+    else:
+        period_type = "duration"
+        period_instant = None
+        period_start = period.start_date
+        period_end = period.end_date
+
+    # dimensions
+    if item.dimensions:
+        dims = [{"axis": d.axis, "member": d.member} for d in item.dimensions]
+        dimensions_json = json.dumps(dims, ensure_ascii=False)
+    else:
+        dimensions_json = None
+
+    return {
+        "doc_id": doc_id,
+        "concept": item.concept,
+        "namespace_uri": item.namespace_uri,
+        "local_name": item.local_name,
+        "label_ja_text": item.label_ja.text,
+        "label_ja_role": item.label_ja.role,
+        "label_ja_source": item.label_ja.source.value,
+        "label_en_text": item.label_en.text,
+        "label_en_role": item.label_en.role,
+        "label_en_source": item.label_en.source.value,
+        "value_numeric": value_numeric,
+        "value_text": value_text,
+        "value_type": value_type,
+        "unit_ref": item.unit_ref,
+        "decimals_int": decimals_int,
+        "decimals_inf": decimals_inf,
+        "context_id": item.context_id,
+        "period_type": period_type,
+        "period_instant": period_instant,
+        "period_start": period_start,
+        "period_end": period_end,
+        "entity_id": item.entity_id,
+        "dimensions_json": dimensions_json,
+        "is_nil": item.is_nil,
+        "source_line": item.source_line,
+        "order": item.order,
+    }
+
+
+def serialize_calc_edges(
+    calc_linkbase: CalculationLinkbase,
+    doc_id: str,
+) -> list[dict[str, Any]]:
+    """CalculationLinkbase を dict 行リストに変換する。
+
+    Args:
+        calc_linkbase: CalculationLinkbase オブジェクト。
+        doc_id: 対応する Filing の doc_id。
+
+    Returns:
+        calc_edges.parquet 用の辞書リスト。
+    """
+    rows: list[dict[str, Any]] = []
+    for tree in calc_linkbase.trees.values():
+        for arc in tree.arcs:
+            rows.append(
+                {
+                    "doc_id": doc_id,
+                    "role_uri": arc.role_uri,
+                    "parent": arc.parent,
+                    "child": arc.child,
+                    "parent_href": arc.parent_href,
+                    "child_href": arc.child_href,
+                    "weight": arc.weight,
+                    "order": arc.order,
+                }
+            )
     return rows
 
 
-def _line_item_rows(
-    data: Sequence[tuple[Filing, Statements | None]],
-) -> list[dict[str, object]]:
-    """全 LineItem を行辞書のリストに変換する。
+def serialize_def_parents(
+    definition_linkbase: dict[str, DefinitionTree] | None,
+    doc_id: str,
+) -> list[dict[str, Any]]:
+    """DefinitionLinkbase → parent_index → dict 行リストに変換する。
 
     Args:
-        data: (Filing, Statements | None) のシーケンス。
+        definition_linkbase: Definition Linkbase の dict。
+        doc_id: 対応する Filing の doc_id。
 
     Returns:
-        line_items.parquet 用の行辞書リスト。
+        def_parents.parquet 用の辞書リスト。
     """
-    rows: list[dict[str, object]] = []
-    for seq, (_filing, stmts) in enumerate(data):
-        if stmts is None:
-            continue
-        for item in stmts:
-            row: dict[str, object] = {
-                "_seq": seq,
-                "concept": item.concept,
-                "namespace_uri": item.namespace_uri,
-                "local_name": item.local_name,
-                "label_ja_text": item.label_ja.text,
-                "label_ja_role": item.label_ja.role,
-                "label_ja_source": item.label_ja.source.value,
-                "label_en_text": item.label_en.text,
-                "label_en_role": item.label_en.role,
-                "label_en_source": item.label_en.source.value,
-                "unit_ref": item.unit_ref,
-                "context_id": item.context_id,
-                "entity_id": item.entity_id,
-                "dimensions": _serialize_dimensions(item),
-                "is_nil": item.is_nil,
-                "source_line": item.source_line,
-                "order": item.order,
+    from tdnet.mapper import build_parent_index
+
+    parent_index = build_parent_index(definition_linkbase)
+    rows: list[dict[str, Any]] = []
+    for child_concept, parent_concept in parent_index.items():
+        rows.append(
+            {
+                "doc_id": doc_id,
+                "child_concept": child_concept,
+                "parent_standard_concept": parent_concept,
             }
-            row.update(_serialize_value(item))
-            row.update(_serialize_decimals(item))
-            row.update(_serialize_period(item))
-            rows.append(row)
+        )
     return rows

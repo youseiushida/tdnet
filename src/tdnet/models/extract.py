@@ -274,8 +274,9 @@ def extract_values(
     # MapperContext 構築
     ctx = MapperContext(
         entity_id=source._entity_id,
-        definition_parent_index=build_parent_index(
-            source._definition_linkbase,
+        definition_parent_index=(
+            source._definition_parent_index
+            or build_parent_index(source._definition_linkbase)
         ),
         calculation_linkbase=source._calculation_linkbase,
     )

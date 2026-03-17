@@ -14,7 +14,7 @@
 pip install tdnet
 ```
 
-依存: `httpx`, `xbrl-core`, `lxml`, `pandas`
+依存: `httpx`, `xbrl-core`, `lxml`, `pandas`, `platformdirs`
 
 ## クイックスタート
 
@@ -407,6 +407,16 @@ for filing, stmts in restored:
 
 出力ファイルは `filings.parquet`（メタデータ）と `line_items.parquet`（全 LineItem）の 2 ファイルです。復元後の `Statements` は `income_statement()` / `extract_values()` / `search()` 等すべてのメソッドがそのまま動作します。
 
+デフォルトで zstd 圧縮・ストリーミング書き出し（row group 単位）が有効です。`compression` と `row_group_size` で変更できます。
+
+```python
+# snappy 圧縮に変更
+export_parquet(pairs, "./data", compression="snappy")
+
+# row group サイズを変更（デフォルト: 5000）
+export_parquet(pairs, "./data", row_group_size=10000)
+```
+
 ### prefix で日付別にファイルを分ける
 
 `prefix` を指定すると、ファイル名の先頭に文字列を付与できます。同一ディレクトリに複数日分を保存する場合に便利です。
@@ -613,7 +623,36 @@ except TdnetError as e:
 - **非連結決算**: `consolidated=False` を指定（`True` だと 0 件）
 - **銀行・保険**: `CK.ORDINARY_REVENUE_BANKING` 等の業種固有 CK を使用
 - **XBRL/PDF の公開期限**: release.tdnet.info 上で約 30-40 日で削除。期限切れ時は JPX 永続 URL に自動フォールバック
-- **タクソノミ**: tse-ed-t (2014-01-12) をパッケージに同梱済み。設定不要
+- **タクソノミ**: tse-ed-t (2014-01-12) をパッケージに同梱済み。設定不要。EDINET タクソノミ（jppfs_cor 等の標準科目ラベル）は `install_taxonomy()` でインストール可能
+- **リンクベース自動抽出**: `parse_zip()` は ZIP 内の lab/def/cal/pre リンクベースを自動抽出。filer ラベルの注入、definition/calculation/presentation リンクベースの Statements 設定が自動で行われる
+
+## EDINET タクソノミのインストール
+
+`install_taxonomy()` で金融庁公式サイトから EDINET タクソノミをダウンロード・インストールできます。jppfs_cor 等の標準科目ラベルが解決されるようになります。
+
+```python
+import tdnet
+
+# 最新版をインストール（初回のみ）
+info = tdnet.install_taxonomy()
+print(info.path)  # ~/.local/share/tdnet/ALL_20251101
+
+# 特定年度を指定
+info = tdnet.install_taxonomy(year=2025)
+
+# インストール済み情報の確認
+info = tdnet.taxonomy_info()
+if info:
+    print(f"{info.year}年版 @ {info.path}")
+
+# 利用可能な年度一覧
+print(tdnet.list_taxonomy_versions())  # [2026, 2025, ...]
+
+# アンインストール
+tdnet.uninstall_taxonomy()
+```
+
+edinet ライブラリでインストール済みのタクソノミも自動検出・再利用されます。
 
 ## 動作要件
 

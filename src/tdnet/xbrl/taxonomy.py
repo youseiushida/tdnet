@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import importlib.resources
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
-from xbrl_core import LabelInfo, LabelSource
+from xbrl_core import LabelInfo, LabelSource, RawLabel
 from xbrl_core.linkbase.label import parse_label_linkbase
 
 logger = logging.getLogger(__name__)
@@ -75,10 +76,18 @@ class TdnetLabelResolver:
             self._load_bundled()
 
     def _load_from_path(self, base: Path) -> None:
-        """指定パスからタクソノミラベルを読み込む。"""
+        """指定パスからタクソノミラベルを読み込む。
+
+        ``*-lab.xml`` と ``*_lab.xml`` の両パターンを探索する
+        （TDnet: ハイフン区切り、EDINET: アンダースコア区切り）。
+        """
         for lab_file in base.rglob("*-lab.xml"):
             self._parse_label_file(lab_file)
+        for lab_file in base.rglob("*_lab.xml"):
+            self._parse_label_file(lab_file)
         for lab_file in base.rglob("*-lab-en.xml"):
+            self._parse_label_file(lab_file)
+        for lab_file in base.rglob("*_lab-en.xml"):
             self._parse_label_file(lab_file)
 
     def _load_bundled(self) -> None:
@@ -89,19 +98,62 @@ class TdnetLabelResolver:
             self._load_from_path(bundled)
             if self._labels:
                 logger.debug("Loaded bundled taxonomy from %s", bundled)
-                return
 
         # 2. CWD の taxonomy/ ディレクトリ（開発時フォールバック）
-        cwd_tax = Path.cwd() / "taxonomy"
-        if cwd_tax.exists():
-            self._load_from_path(cwd_tax)
-            if self._labels:
-                logger.debug("Loaded taxonomy from %s", cwd_tax)
-                return
+        if not self._labels:
+            cwd_tax = Path.cwd() / "taxonomy"
+            if cwd_tax.exists():
+                self._load_from_path(cwd_tax)
+                if self._labels:
+                    logger.debug("Loaded taxonomy from %s", cwd_tax)
 
-        logger.debug("No bundled taxonomy found")
+        # 3. インストール済み EDINET タクソノミも自動ロード
+        try:
+            from tdnet.taxonomy_install import detect_installed_taxonomy
+            installed = detect_installed_taxonomy()
+            if installed is not None:
+                self._load_from_path(Path(installed))
+                logger.debug("Loaded installed taxonomy from %s", installed)
+        except Exception:
+            pass
+
+        if not self._labels:
+            logger.debug("No bundled taxonomy found")
+
+    def inject_filer_labels(self, raw_labels: tuple[RawLabel, ...]) -> None:
+        """ZIP 内 lab.xml からパースした filer ラベルを注入する。
+
+        標準ラベルがロード済みの状態で呼び出すこと。
+        ``LabelSource.EXTENSION`` で登録し、``convert_line_item`` で
+        ``LabelSource.FILER`` に変換される。
+
+        Args:
+            raw_labels: ZIP 内ラベルリンクベースからパースした RawLabel のタプル。
+        """
+        self._ensure_loaded()
+
+        for rl in raw_labels:
+            concept_name = rl.concept_name
+
+            label = LabelInfo(
+                text=rl.text,
+                role=rl.role,
+                lang=rl.lang,
+                source=LabelSource.EXTENSION,
+            )
+
+            # concept_name で登録（filer ラベルは上書き）
+            self._labels[(concept_name, rl.lang, rl.role)] = label
+
+            # local_name でも登録
+            if "_" in concept_name:
+                _, local_name = concept_name.split("_", 1)
+            else:
+                local_name = concept_name
+            self._labels[(local_name, rl.lang, rl.role)] = label
 
     def _parse_label_file(self, path: Path) -> None:
+        """ラベルリンクベースファイルをパースして ``_labels`` に登録する。"""
         try:
             raw_labels = parse_label_linkbase(path.read_bytes(), source_path=str(path))
         except Exception:
@@ -144,14 +196,44 @@ class TdnetLabelResolver:
         lang: str,
         role: str = _STANDARD_ROLE,
     ) -> LabelInfo | None:
+        """ラベルを解決する。
+
+        Clark notation (``{ns}LocalName``) の完全一致を試み、
+        見つからなければ local_name にフォールバックする。
+
+        Args:
+            concept_qname: 概念名（Clark notation または local_name）。
+            lang: 言語コード（``"ja"`` / ``"en"``）。
+            role: ラベルロール URI。
+
+        Returns:
+            解決された LabelInfo。見つからなければ ``None``。
+        """
         self._ensure_loaded()
-        return self._labels.get((concept_qname, lang, role))
+        result = self._labels.get((concept_qname, lang, role))
+        if result is not None:
+            return result
+        # Clark notation → local_name フォールバック
+        if "}" in concept_qname:
+            local_name = concept_qname.split("}")[-1]
+            return self._labels.get((local_name, lang, role))
+        return None
 
     def resolve_batch(
         self,
-        concept_qnames: list[str] | tuple[str, ...],
+        concept_qnames: Sequence[str],
         lang: str,
         role: str = _STANDARD_ROLE,
     ) -> dict[str, LabelInfo | None]:
+        """複数の概念名のラベルを一括解決する。
+
+        Args:
+            concept_qnames: 概念名のシーケンス。
+            lang: 言語コード。
+            role: ラベルロール URI。
+
+        Returns:
+            概念名をキー、LabelInfo を値とする辞書。
+        """
         self._ensure_loaded()
         return {qn: self.resolve(qn, lang, role) for qn in concept_qnames}

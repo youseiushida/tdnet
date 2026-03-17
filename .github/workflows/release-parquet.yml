@@ -1,0 +1,184 @@
+name: Release TDnet Parquet Dataset
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "リリースタグ"
+        default: "tdnet-dataset-v1"
+        type: string
+      max_parallel:
+        description: "同時実行ジョブ数 (TDnet レート制限考慮)"
+        default: "4"
+        type: choice
+        options: ["1", "2", "3", "4", "8"]
+
+jobs:
+  # ================================================================
+  # 1. Draft Release を作成
+  # ================================================================
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ inputs.tag }}" \
+            --draft \
+            --title "TDnet Parquet Dataset" \
+            --notes "$(cat <<'EOF'
+          ## TDnet 決算短信等 Parquet データセット
+
+          TDnet の決算短信・業績予想修正・配当予想修正を
+          半年ごとに Parquet 化したデータセット。
+
+          ### 含まれるテーブル
+          - `filings.parquet` — 書類メタデータ
+          - `line_items.parquet` — 数値 Fact
+          - `text_blocks.parquet` — テキスト Fact
+          - `calc_edges.parquet` — 計算リンクベース
+          - `def_parents.parquet` — 定義リンクベース
+
+          ### 使い方
+          ```python
+          import tarfile, tdnet
+
+          with tarfile.open("tdnet-2025-H1.tar") as tf:
+              tf.extractall("./data/2025-H1")
+
+          for filing, stmts in tdnet.iter_parquet("./data/2025-H1"):
+              if stmts is not None:
+                  values = tdnet.extract_values(stmts, [tdnet.CK.REVENUE])
+          ```
+
+          ### 生成環境
+          - `adump_to_parquet_process_pool(max_workers=4, concurrency=8)`
+          - GitHub Actions `ubuntu-latest` (4 vCPU, 16 GB RAM)
+          - 圧縮: zstd
+          EOF
+          )" \
+            || echo "Release already exists, continuing..."
+
+  # ================================================================
+  # 2. 半年ごとに dump → tar → Release にアップロード
+  # ================================================================
+  dump:
+    needs: create-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
+      matrix:
+        include:
+          # 2014
+          - { start: "2014-01-01", end: "2014-06-30", label: "2014-H1" }
+          - { start: "2014-07-01", end: "2014-12-31", label: "2014-H2" }
+          # 2015
+          - { start: "2015-01-01", end: "2015-06-30", label: "2015-H1" }
+          - { start: "2015-07-01", end: "2015-12-31", label: "2015-H2" }
+          # 2016
+          - { start: "2016-01-01", end: "2016-06-30", label: "2016-H1" }
+          - { start: "2016-07-01", end: "2016-12-31", label: "2016-H2" }
+          # 2017
+          - { start: "2017-01-01", end: "2017-06-30", label: "2017-H1" }
+          - { start: "2017-07-01", end: "2017-12-31", label: "2017-H2" }
+          # 2018
+          - { start: "2018-01-01", end: "2018-06-30", label: "2018-H1" }
+          - { start: "2018-07-01", end: "2018-12-31", label: "2018-H2" }
+          # 2019
+          - { start: "2019-01-01", end: "2019-06-30", label: "2019-H1" }
+          - { start: "2019-07-01", end: "2019-12-31", label: "2019-H2" }
+          # 2020
+          - { start: "2020-01-01", end: "2020-06-30", label: "2020-H1" }
+          - { start: "2020-07-01", end: "2020-12-31", label: "2020-H2" }
+          # 2021
+          - { start: "2021-01-01", end: "2021-06-30", label: "2021-H1" }
+          - { start: "2021-07-01", end: "2021-12-31", label: "2021-H2" }
+          # 2022
+          - { start: "2022-01-01", end: "2022-06-30", label: "2022-H1" }
+          - { start: "2022-07-01", end: "2022-12-31", label: "2022-H2" }
+          # 2023
+          - { start: "2023-01-01", end: "2023-06-30", label: "2023-H1" }
+          - { start: "2023-07-01", end: "2023-12-31", label: "2023-H2" }
+          # 2024
+          - { start: "2024-01-01", end: "2024-06-30", label: "2024-H1" }
+          - { start: "2024-07-01", end: "2024-12-31", label: "2024-H2" }
+          # 2025
+          - { start: "2025-01-01", end: "2025-06-30", label: "2025-H1" }
+          - { start: "2025-07-01", end: "2025-12-31", label: "2025-H2" }
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --extra analysis
+
+      - name: Run dump pipeline (${{ matrix.label }})
+        run: |
+          uv run python tools/dump_tdnet.py \
+            --start "${{ matrix.start }}" \
+            --end "${{ matrix.end }}" \
+            --process-pool \
+            --max-workers 4 \
+            --concurrency 8 \
+            --output-dir ./parquet_output
+
+      - name: Create tar and check size
+        run: |
+          cd parquet_output
+          tar cf "../tdnet-${{ matrix.label }}.tar" *.parquet dump_report.txt 2>/dev/null || \
+          tar cf "../tdnet-${{ matrix.label }}.tar" *.parquet
+          cd ..
+          SIZE=$(stat --format=%s "tdnet-${{ matrix.label }}.tar")
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "tdnet-${{ matrix.label }}.tar: ${SIZE_MB} MB"
+          if [ "$SIZE" -gt 2040109465 ]; then
+            echo "::error::tar が 2GB を超えています (${SIZE_MB} MB)。四半期分割に切り替えてください。"
+            exit 1
+          fi
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.tag }}" \
+            "tdnet-${{ matrix.label }}.tar" \
+            --clobber
+
+  # ================================================================
+  # 3. 全アセット確認 → Release を公開
+  # ================================================================
+  finalize:
+    needs: dump
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check and publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploaded Assets ==="
+          gh release view "${{ inputs.tag }}" --json assets \
+            -q '.assets[] | "\(.name)\t\(.size / 1024 / 1024 | floor) MB"'
+
+          ASSET_COUNT=$(gh release view "${{ inputs.tag }}" --json assets -q '.assets | length')
+          EXPECTED=24
+          echo ""
+          echo "Assets: ${ASSET_COUNT} / ${EXPECTED}"
+
+          if [ "$ASSET_COUNT" -eq "$EXPECTED" ]; then
+            gh release edit "${{ inputs.tag }}" --draft=false
+            echo "Release published!"
+          else
+            echo "::warning::${ASSET_COUNT}/${EXPECTED} assets uploaded. Release remains draft. Re-run failed jobs to complete."
+          fi

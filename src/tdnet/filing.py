@@ -48,17 +48,12 @@ class Filing:
 
     @property
     def doc_id(self) -> str:
-        """文書 ID（URL から抽出）。"""
+        """文書 ID（URL のファイル名 stem 全体）。"""
         url = self.document_url or self.xbrl_url
         if not url:
             return ""
-        # URL末尾の {prefix}{YYYYMMDD}{DOCID}.{ext} から DOCID を取得
         name = url.rsplit("/", 1)[-1]
-        # prefix(4) + YYYYMMDD(8) + DOCID(6) + .ext
-        stem = name.rsplit(".", 1)[0]
-        if len(stem) >= 18:
-            return stem[12:]  # DOCID 部分
-        return stem
+        return name.rsplit(".", 1)[0]
 
     def fetch_xbrl(self, *, refresh: bool = False) -> DownloadResult:
         """XBRL ZIP をダウンロードする。キャッシュがあればそれを使う。

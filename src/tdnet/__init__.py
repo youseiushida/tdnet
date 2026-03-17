@@ -53,6 +53,18 @@ from xbrl_core import (
 from tdnet.models.financial_statement import FinancialStatement
 from tdnet.models.statements import Statements
 from tdnet.xbrl.parser import parse_zip, parse_ixbrl_files
+from tdnet.taxonomy_install import (
+    TaxonomyInfo,
+    install_taxonomy,
+    list_taxonomy_versions,
+    taxonomy_info,
+    uninstall_taxonomy,
+)
+from tdnet.extension import adump_to_parquet as adump_to_parquet
+from tdnet.extension import adump_to_parquet_thread_pool as adump_to_parquet_thread_pool
+from tdnet.extension import adump_to_parquet_process_pool as adump_to_parquet_process_pool
+from tdnet.extension import iter_parquet as iter_parquet
+from tdnet.extension import DumpResult as DumpResult
 
 _logger = logging.getLogger(__name__)
 
@@ -175,4 +187,16 @@ __all__ = [
     "list_by_code",
     "list_by_range",
     "search",
+    # タクソノミ管理
+    "TaxonomyInfo",
+    "install_taxonomy",
+    "list_taxonomy_versions",
+    "taxonomy_info",
+    "uninstall_taxonomy",
+    # Parquet バッチ
+    "adump_to_parquet",
+    "adump_to_parquet_thread_pool",
+    "adump_to_parquet_process_pool",
+    "iter_parquet",
+    "DumpResult",
 ]

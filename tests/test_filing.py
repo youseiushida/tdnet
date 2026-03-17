@@ -63,10 +63,10 @@ class TestFilingProperties:
         assert filing.has_xbrl is False
 
     def test_doc_id_from_url(self):
-        """URL から doc_id を抽出。"""
+        """URL から doc_id を抽出（フル stem）。"""
         filing = _sample_filing()
         doc_id = filing.doc_id
-        assert doc_id == "553722"
+        assert doc_id == "140120250306553722"
 
     def test_doc_id_short_url(self):
         """短い URL の doc_id。"""
@@ -74,7 +74,6 @@ class TestFilingProperties:
             document_url="https://example.com/short.pdf",
             xbrl_url="",
         )
-        # stem = "short", len < 18 → stem そのまま
         assert filing.doc_id == "short"
 
     def test_doc_id_no_url(self):

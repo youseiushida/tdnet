@@ -5,12 +5,12 @@ from tdnet.models.financial_statement import FinancialStatement as FinancialStat
 from tdnet.models.statement_type import StatementType as StatementType
 from tdnet.models.types import LineItem as LineItem
 from typing import Literal
-from xbrl_core import CalculationLinkbase as CalculationLinkbase, DefinitionTree as DefinitionTree
+from xbrl_core import CalculationLinkbase as CalculationLinkbase, DefinitionTree as DefinitionTree, PresentationTree as PresentationTree
 from xbrl_core.periods import DurationPeriod, InstantPeriod, Period as Period
 
 class Statements:
     """財務諸表コンテナ。"""
-    def __init__(self, items: tuple[LineItem, ...], *, entity_id: str = '', warnings: tuple[str, ...] = (), definition_linkbase: dict[str, DefinitionTree] | None = None, calculation_linkbase: CalculationLinkbase | None = None) -> None: ...
+    def __init__(self, items: tuple[LineItem, ...], *, entity_id: str = '', warnings: tuple[str, ...] = (), definition_linkbase: dict[str, DefinitionTree] | None = None, calculation_linkbase: CalculationLinkbase | None = None, presentation_linkbase: dict[str, PresentationTree] | None = None) -> None: ...
     def income_statement(self, *, consolidated: bool = True, period: DurationPeriod | Literal['current', 'prior'] | None = None, strict: bool = False) -> FinancialStatement:
         """損益計算書を組み立てる。"""
     def balance_sheet(self, *, consolidated: bool = True, period: InstantPeriod | Literal['current', 'prior'] | None = None, strict: bool = False) -> FinancialStatement:

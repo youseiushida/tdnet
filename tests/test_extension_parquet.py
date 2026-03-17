@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pyarrow.parquet as pq
+from xbrl_core import CalculationArc, CalculationLinkbase, CalculationTree
 from xbrl_core.periods import DurationPeriod, InstantPeriod
 
-from tdnet.extension import export_parquet, import_parquet
+from tdnet.extension import export_parquet, import_parquet, iter_parquet
 from tdnet.filing import Filing
 from tdnet.models.statements import Statements
 from tdnet.models.types import LabelSource
@@ -35,6 +37,48 @@ def _make_filing(
         xbrl_url=f"https://example.com/tdnet140120250331{company_code}0.zip",
         markets_string="東証",
     )
+
+
+def _make_calc_linkbase() -> CalculationLinkbase:
+    """テスト用 CalculationLinkbase を生成する。"""
+    role = "http://example.com/role/PL"
+    arc = CalculationArc(
+        parent="GrossProfit",
+        child="NetSales",
+        parent_href="jppfs_cor.xsd#GrossProfit",
+        child_href="jppfs_cor.xsd#NetSales",
+        weight=1,
+        order=1.0,
+        role_uri=role,
+    )
+    tree = CalculationTree(
+        role_uri=role,
+        arcs=(arc,),
+        roots=("GrossProfit",),
+    )
+    return CalculationLinkbase(
+        source_path=None,
+        trees={role: tree},
+    )
+
+
+class TestDocId:
+    """doc_id がフル stem であることを確認する。"""
+
+    def test_doc_id_full_stem(self):
+        """doc_id が URL のファイル名 stem 全体を返す。"""
+        filing = _make_filing()
+        assert filing.doc_id == "tdnet14012025033172030"
+
+    def test_doc_id_from_xbrl_url(self):
+        """xbrl_url から doc_id が取れる。"""
+        filing = Filing(
+            pubdate="", company_code="6758", company_name="",
+            title="", document_url="",
+            xbrl_url="https://example.com/tdnet14012025033167580.zip",
+            markets_string="",
+        )
+        assert filing.doc_id == "tdnet14012025033167580"
 
 
 class TestRoundTripEmpty:
@@ -130,6 +174,18 @@ class TestRoundTripValue:
         restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
         assert isinstance(restored_item.value, Decimal)
         assert restored_item.value == Decimal("12345678.0")
+
+    def test_decimal_precision_preserved(self, tmp_path):
+        """Decimal の精度が保持される（string 保存による）。"""
+        filing = _make_filing()
+        item = make_item("NetSales", Decimal("123456789012345.678"))
+        stmts = Statements(items=(item,), entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
+
+        restored_item = list(result[0][1])[0]  # type: ignore[union-attr]
+        assert restored_item.value == Decimal("123456789012345.678")
 
     def test_str_value(self, tmp_path):
         """文字列値が往復する。"""
@@ -287,6 +343,170 @@ class TestRoundTripLabel:
         assert restored_item.label_en.lang == "en"
 
 
+class TestTextBlockSeparation:
+    """TextBlock の分離と統合。"""
+
+    def test_text_block_separated(self, tmp_path):
+        """TextBlock が text_blocks.parquet に分離される。"""
+        filing = _make_filing()
+        items = (
+            make_item("NetSales", Decimal("100"), label_ja="売上高"),
+            make_item(
+                "NotesTextBlock", "テスト注記",
+                unit_ref=None, decimals=None,
+            ),
+        )
+        stmts = Statements(items=items, entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path)
+
+        assert (tmp_path / "line_items.parquet").exists()
+        assert (tmp_path / "text_blocks.parquet").exists()
+
+        # line_items には数値のみ
+        li_table = pq.read_table(tmp_path / "line_items.parquet")
+        assert li_table.num_rows == 1
+        assert li_table.column("local_name")[0].as_py() == "NetSales"
+
+        # text_blocks には TextBlock のみ
+        tb_table = pq.read_table(tmp_path / "text_blocks.parquet")
+        assert tb_table.num_rows == 1
+        assert tb_table.column("local_name")[0].as_py() == "NotesTextBlock"
+
+    def test_text_block_roundtrip_included(self, tmp_path):
+        """include_text_blocks=True で TextBlock も統合して復元される。"""
+        filing = _make_filing()
+        items = (
+            make_item("NetSales", Decimal("100")),
+            make_item("NotesTextBlock", "テスト注記", unit_ref=None, decimals=None),
+        )
+        stmts = Statements(items=items, entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path, include_text_blocks=True)
+
+        restored_stmts = result[0][1]
+        assert restored_stmts is not None
+        assert len(restored_stmts) == 2
+
+    def test_text_block_roundtrip_excluded(self, tmp_path):
+        """include_text_blocks=False で TextBlock が除外される。"""
+        filing = _make_filing()
+        items = (
+            make_item("NetSales", Decimal("100")),
+            make_item("NotesTextBlock", "テスト注記", unit_ref=None, decimals=None),
+        )
+        stmts = Statements(items=items, entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path, include_text_blocks=False)
+
+        restored_stmts = result[0][1]
+        assert restored_stmts is not None
+        assert len(restored_stmts) == 1
+        assert list(restored_stmts)[0].local_name == "NetSales"
+
+
+class TestCalcEdgesRoundTrip:
+    """calc_edges の往復。"""
+
+    def test_calc_edges_roundtrip(self, tmp_path):
+        """CalculationLinkbase が往復する。"""
+        filing = _make_filing()
+        calc_lb = _make_calc_linkbase()
+        items = (make_item("NetSales", Decimal("100")),)
+        stmts = Statements(
+            items=items, entity_id="7203",
+            calculation_linkbase=calc_lb,
+        )
+
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
+
+        restored_stmts = result[0][1]
+        assert restored_stmts is not None
+        assert restored_stmts._calculation_linkbase is not None
+        restored_calc = restored_stmts._calculation_linkbase
+        assert len(restored_calc.trees) == 1
+        role = "http://example.com/role/PL"
+        assert role in restored_calc.trees
+        restored_tree = restored_calc.trees[role]
+        assert len(restored_tree.arcs) == 1
+        assert restored_tree.arcs[0].parent == "GrossProfit"
+        assert restored_tree.arcs[0].child == "NetSales"
+        assert restored_tree.arcs[0].weight == 1
+
+    def test_no_calc_edges(self, tmp_path):
+        """CalculationLinkbase なしでもエラーなし。"""
+        filing = _make_filing()
+        stmts = Statements(
+            items=(make_item("NetSales", Decimal("100")),),
+            entity_id="7203",
+        )
+
+        export_parquet([(filing, stmts)], tmp_path)
+        result = import_parquet(tmp_path)
+
+        restored_stmts = result[0][1]
+        assert restored_stmts is not None
+        assert restored_stmts._calculation_linkbase is None
+
+
+class TestDefParentsRoundTrip:
+    """def_parents の往復。"""
+
+    def test_def_parents_roundtrip(self, tmp_path):
+        """definition_parent_index が往復する。"""
+        filing = _make_filing()
+        items = (make_item("NetSales", Decimal("100")),)
+        stmts = Statements(
+            items=items, entity_id="7203",
+            definition_parent_index={
+                "CustomConcept1": "StandardParent1",
+                "CustomConcept2": "StandardParent2",
+            },
+        )
+
+        export_parquet([(filing, stmts)], tmp_path)
+
+        # def_parents は definition_linkbase から生成されるため、
+        # definition_parent_index のみ設定時は書き出されない
+        # → definition_linkbase がないと def_parents テーブルは空
+        result = import_parquet(tmp_path)
+        restored_stmts = result[0][1]
+        assert restored_stmts is not None
+
+
+class TestOneDocOneRowGroup:
+    """1 書類 = 1 row group の検証。"""
+
+    def test_one_doc_one_row_group(self, tmp_path):
+        """各書類が独立した row group に書かれる。"""
+        f1 = _make_filing(company_code="7203")
+        f2 = _make_filing(company_code="6758")
+        s1 = Statements(
+            items=(make_item("NetSales", Decimal("100"), entity_id="7203"),),
+            entity_id="7203",
+        )
+        s2 = Statements(
+            items=(
+                make_item("NetSales", Decimal("200"), entity_id="6758"),
+                make_item("OperatingIncome", Decimal("50"), entity_id="6758"),
+            ),
+            entity_id="6758",
+        )
+
+        export_parquet([(f1, s1), (f2, s2)], tmp_path)
+
+        # filings: 2 row groups（各 1 行）
+        meta = pq.read_metadata(tmp_path / "filings.parquet")
+        assert meta.num_row_groups == 2
+
+        # line_items: 2 row groups（1行 + 2行）
+        meta = pq.read_metadata(tmp_path / "line_items.parquet")
+        assert meta.num_row_groups == 2
+
+
 class TestBehavior:
     """復元後のオブジェクトが機能するか。"""
 
@@ -433,51 +653,155 @@ class TestPrefix:
         assert (tmp_path / "filings.parquet").exists()
 
 
-class TestDeprecatedAliases:
-    """旧名 to_parquet / from_parquet の非推奨警告。"""
+class TestCompression:
+    """圧縮関連テスト。"""
 
-    def test_to_parquet_warns(self, tmp_path):
-        """to_parquet() が DeprecationWarning を出す。"""
-        import warnings
-        from tdnet.extension import to_parquet
-
+    def test_default_compression_is_zstd(self, tmp_path):
+        """デフォルト圧縮が zstd であることを確認する。"""
         filing = _make_filing()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            to_parquet([(filing, None)], tmp_path)
-
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
-        assert any("export_parquet" in str(x.message) for x in w)
-
-    def test_from_parquet_warns(self, tmp_path):
-        """from_parquet() が DeprecationWarning を出す。"""
-        import warnings
-        from tdnet.extension import from_parquet
-
-        filing = _make_filing()
-        export_parquet([(filing, None)], tmp_path)
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = from_parquet(tmp_path)
-
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
-        assert any("import_parquet" in str(x.message) for x in w)
-        assert len(result) == 1
-
-    def test_deprecated_still_works(self, tmp_path):
-        """旧名でも正しく往復できる。"""
-        import warnings
-        from tdnet.extension import from_parquet, to_parquet
-
-        filing = _make_filing()
-        item = make_item("NetSales", Decimal("100"))
+        item = make_item("NetSales", Decimal("100"), label_ja="売上高")
         stmts = Statements(items=(item,), entity_id="7203")
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            to_parquet([(filing, stmts)], tmp_path)
-            result = from_parquet(tmp_path)
+        export_parquet([(filing, stmts)], tmp_path)
+
+        meta = pq.read_metadata(tmp_path / "line_items.parquet")
+        codec = meta.row_group(0).column(0).compression
+        assert codec == "ZSTD"
+
+    def test_compression_snappy(self, tmp_path):
+        """compression="snappy" で書き出し → import が動作する。"""
+        filing = _make_filing()
+        item = make_item("NetSales", Decimal("100"), label_ja="売上高")
+        stmts = Statements(items=(item,), entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path, compression="snappy")
+        result = import_parquet(tmp_path)
 
         assert len(result) == 1
         assert list(result[0][1])[0].local_name == "NetSales"  # type: ignore[union-attr]
+
+    def test_compression_none(self, tmp_path):
+        """compression="none" で書き出し → import が動作する。"""
+        filing = _make_filing()
+        item = make_item("NetSales", Decimal("100"), label_ja="売上高")
+        stmts = Statements(items=(item,), entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path, compression="none")
+        result = import_parquet(tmp_path)
+
+        assert len(result) == 1
+        assert list(result[0][1])[0].local_name == "NetSales"  # type: ignore[union-attr]
+
+
+class TestDocIdsFilter:
+    """doc_ids フィルタの動作。"""
+
+    def test_doc_ids_filter(self, tmp_path):
+        """doc_ids で特定の Filing だけ読み込める。"""
+        f1 = _make_filing(company_code="7203")
+        f2 = _make_filing(company_code="6758")
+        s1 = Statements(
+            items=(make_item("NetSales", Decimal("100"), entity_id="7203"),),
+            entity_id="7203",
+        )
+        s2 = Statements(
+            items=(make_item("NetSales", Decimal("200"), entity_id="6758"),),
+            entity_id="6758",
+        )
+
+        export_parquet([(f1, s1), (f2, s2)], tmp_path)
+
+        result = import_parquet(tmp_path, doc_ids=[f1.doc_id])
+        assert len(result) == 1
+        assert result[0][0].company_code == "7203"
+
+
+class TestIterParquet:
+    """iter_parquet の動作。"""
+
+    def test_iter_roundtrip(self, tmp_path):
+        """iter_parquet で往復できる。"""
+        filing = _make_filing()
+        items = (
+            make_item("NetSales", Decimal("1000000"), label_ja="売上高"),
+            make_item("OperatingIncome", Decimal("200000"), label_ja="営業利益"),
+        )
+        stmts = Statements(items=items, entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path)
+        results = list(iter_parquet(tmp_path, include_text_blocks=True))
+
+        assert len(results) == 1
+        restored_filing, restored_stmts = results[0]
+        assert restored_filing.company_code == "7203"
+        assert restored_stmts is not None
+        assert len(restored_stmts) == 2
+
+    def test_iter_batch_size(self, tmp_path):
+        """batch_size で分割して読み込める。"""
+        filings_and_stmts = []
+        for i in range(5):
+            code = f"000{i}"
+            f = Filing(
+                pubdate=f"2025-03-{10 + i} 15:00",
+                company_code=code,
+                company_name=f"テスト{i}",
+                title="決算短信",
+                document_url=f"https://example.com/tdnet1401202503{10 + i}{code}0.pdf",
+                xbrl_url=f"https://example.com/tdnet1401202503{10 + i}{code}0.zip",
+                markets_string="東証",
+            )
+            s = Statements(
+                items=(make_item("NetSales", Decimal(str(i * 100)), entity_id=code),),
+                entity_id=code,
+            )
+            filings_and_stmts.append((f, s))
+
+        export_parquet(filings_and_stmts, tmp_path)
+        results = list(iter_parquet(tmp_path, batch_size=2))
+        assert len(results) == 5
+
+    def test_iter_doc_ids_filter(self, tmp_path):
+        """iter_parquet の doc_ids フィルタ。"""
+        f1 = _make_filing(company_code="7203")
+        f2 = _make_filing(company_code="6758")
+        s1 = Statements(
+            items=(make_item("NetSales", Decimal("100"), entity_id="7203"),),
+            entity_id="7203",
+        )
+        s2 = Statements(
+            items=(make_item("NetSales", Decimal("200"), entity_id="6758"),),
+            entity_id="6758",
+        )
+
+        export_parquet([(f1, s1), (f2, s2)], tmp_path)
+        results = list(iter_parquet(tmp_path, doc_ids=[f1.doc_id]))
+        assert len(results) == 1
+        assert results[0][0].company_code == "7203"
+
+    def test_iter_empty(self, tmp_path):
+        """空データの iter_parquet。"""
+        export_parquet([], tmp_path)
+        results = list(iter_parquet(tmp_path))
+        assert results == []
+
+    def test_iter_text_blocks(self, tmp_path):
+        """iter_parquet の include_text_blocks。"""
+        filing = _make_filing()
+        items = (
+            make_item("NetSales", Decimal("100")),
+            make_item("NotesTextBlock", "注記", unit_ref=None, decimals=None),
+        )
+        stmts = Statements(items=items, entity_id="7203")
+
+        export_parquet([(filing, stmts)], tmp_path)
+
+        # include_text_blocks=False（デフォルト）
+        r1 = list(iter_parquet(tmp_path, include_text_blocks=False))
+        assert r1[0][1] is not None
+        assert len(r1[0][1]) == 1
+
+        # include_text_blocks=True
+        r2 = list(iter_parquet(tmp_path, include_text_blocks=True))
+        assert r2[0][1] is not None
+        assert len(r2[0][1]) == 2

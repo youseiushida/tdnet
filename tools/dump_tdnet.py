@@ -86,11 +86,12 @@ def _collect_filings(
     while current <= end_date:
         date_str = current.strftime("%Y%m%d")
         try:
-            items = list_by_date(date_str, has_xbrl=has_xbrl, limit=1000)
+            items = list_by_date(date_str, has_xbrl=has_xbrl, limit=5000)
             day_filings = [Filing.from_yanoshin(item) for item in items]
             all_filings.extend(day_filings)
             if day_filings:
-                print(f"  {current.isoformat()}: {len(day_filings)} 件")
+                suffix = " ⚠ limit到達" if len(day_filings) >= 5000 else ""
+                print(f"  {current.isoformat()}: {len(day_filings)} 件{suffix}")
         except TdnetError as exc:
             logger.warning("  %s: スキップ (%s)", current.isoformat(), exc)
         except Exception as exc:

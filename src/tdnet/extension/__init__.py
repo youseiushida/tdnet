@@ -711,7 +711,7 @@ async def adump_to_parquet(
         from tdnet.api import list_by_range
         from tdnet.filing import Filing as _Filing
 
-        raw_items = list_by_range(start, end, has_xbrl=has_xbrl)
+        raw_items = list_by_range(start, end, has_xbrl=has_xbrl, limit=10000)
         filings = [_Filing.from_yanoshin(item) for item in raw_items]
     else:
         from tdnet import documents
@@ -868,7 +868,7 @@ async def adump_to_parquet_thread_pool(
         from tdnet.api import list_by_range
         from tdnet.filing import Filing as _Filing
 
-        raw_items = list_by_range(start, end, has_xbrl=has_xbrl)
+        raw_items = list_by_range(start, end, has_xbrl=has_xbrl, limit=10000)
         filings = [_Filing.from_yanoshin(item) for item in raw_items]
     else:
         from tdnet import documents
@@ -1094,7 +1094,7 @@ async def adump_to_parquet_process_pool(
         from tdnet.api import list_by_range
         from tdnet.filing import Filing as _Filing
 
-        raw_items = list_by_range(start, end, has_xbrl=has_xbrl)
+        raw_items = list_by_range(start, end, has_xbrl=has_xbrl, limit=10000)
         filings = [_Filing.from_yanoshin(item) for item in raw_items]
     else:
         from tdnet import documents

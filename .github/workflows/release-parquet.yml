@@ -77,12 +77,6 @@ jobs:
       max-parallel: ${{ fromJSON(inputs.max_parallel) }}
       matrix:
         include:
-          # 2014
-          - { start: "2014-01-01", end: "2014-06-30", label: "2014-H1" }
-          - { start: "2014-07-01", end: "2014-12-31", label: "2014-H2" }
-          # 2015
-          - { start: "2015-01-01", end: "2015-06-30", label: "2015-H1" }
-          - { start: "2015-07-01", end: "2015-12-31", label: "2015-H2" }
           # 2016
           - { start: "2016-01-01", end: "2016-06-30", label: "2016-H1" }
           - { start: "2016-07-01", end: "2016-12-31", label: "2016-H2" }
@@ -172,7 +166,7 @@ jobs:
             -q '.assets[] | "\(.name)\t\(.size / 1024 / 1024 | floor) MB"'
 
           ASSET_COUNT=$(gh release view "${{ inputs.tag }}" --json assets -q '.assets | length')
-          EXPECTED=24
+          EXPECTED=20
           echo ""
           echo "Assets: ${ASSET_COUNT} / ${EXPECTED}"
 

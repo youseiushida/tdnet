@@ -196,15 +196,15 @@ async def _run_dump(
                     writers.write_rows("def_parents", result["def_rows"])
                     del result
                     xbrl_ok += 1
-                except Exception:
-                    logger.warning("XBRL パース失敗: %s", doc_id, exc_info=True)
+                except Exception as exc:
+                    logger.debug("XBRL パース失敗: %s (%s)", doc_id, exc)
                     writers.write_rows("filings", [serialize_filing(filing, False)])
                     errors += 1
                 processed += 1
                 if processed % 20 == 0:
                     gc.collect()
                 if processed % 100 == 0:
-                    print(f"  ... {processed}/{xbrl_count} 完了")
+                    print(f"  ... {processed}/{xbrl_count} 完了 (errors={errors})")
 
             with ProcessPoolExecutor(max_workers=max_workers) as pool:
                 await asyncio.gather(
@@ -220,8 +220,8 @@ async def _run_dump(
                 async with sem:
                     try:
                         stmts = await filing.axbrl(taxonomy_path=taxonomy_path)
-                    except Exception:
-                        logger.warning("XBRL パース失敗: %s", doc_id, exc_info=True)
+                    except Exception as exc:
+                        logger.debug("XBRL パース失敗: %s (%s)", doc_id, exc)
                         errors += 1
                 writers.write_rows("filings", [serialize_filing(filing, stmts is not None)])
                 if stmts is not None:
@@ -247,7 +247,7 @@ async def _run_dump(
                 if processed % 20 == 0:
                     gc.collect()
                 if processed % 100 == 0:
-                    print(f"  ... {processed}/{xbrl_count} 完了")
+                    print(f"  ... {processed}/{xbrl_count} 完了 (errors={errors})")
 
             await asyncio.gather(*[_process_async(f) for f in xbrl_filings])
 

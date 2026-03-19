@@ -1,0 +1,70 @@
+name: Rerun TDnet Parquet (single period)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "アップロード先リリースタグ"
+        default: "tdnet-dataset-v1"
+        type: string
+      label:
+        description: "半期ラベル (例: 2019-H2)"
+        required: true
+        type: string
+      start:
+        description: "開始日 (YYYY-MM-DD)"
+        required: true
+        type: string
+      end:
+        description: "終了日 (YYYY-MM-DD)"
+        required: true
+        type: string
+      concurrency:
+        description: "同時ダウンロード数"
+        default: "3"
+        type: choice
+        options: ["1", "2", "3", "4", "8"]
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --extra analysis
+
+      - name: Run dump pipeline (${{ inputs.label }})
+        run: |
+          uv run python tools/dump_tdnet.py \
+            --start "${{ inputs.start }}" \
+            --end "${{ inputs.end }}" \
+            --process-pool \
+            --max-workers 4 \
+            --concurrency "${{ inputs.concurrency }}" \
+            --output-dir ./parquet_output
+
+      - name: Create tar and check size
+        run: |
+          cd parquet_output
+          tar cf "../tdnet-${{ inputs.label }}.tar" *.parquet dump_report.txt 2>/dev/null || \
+          tar cf "../tdnet-${{ inputs.label }}.tar" *.parquet
+          cd ..
+          SIZE=$(stat --format=%s "tdnet-${{ inputs.label }}.tar")
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "tdnet-${{ inputs.label }}.tar: ${SIZE_MB} MB"
+          if [ "$SIZE" -gt 2040109465 ]; then
+            echo "::error::tar が 2GB を超えています (${SIZE_MB} MB)。四半期分割に切り替えてください。"
+            exit 1
+          fi
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.tag }}" \
+            "tdnet-${{ inputs.label }}.tar" \
+            --clobber

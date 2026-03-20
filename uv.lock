@@ -545,7 +545,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0" },
     { name = "platformdirs", specifier = ">=3.0" },
     { name = "pyarrow", marker = "extra == 'analysis'", specifier = ">=14.0" },
-    { name = "xbrl-core", specifier = ">=0.1.2" },
+    { name = "xbrl-core", specifier = "==0.2.1" },
 ]
 provides-extras = ["analysis"]
 
@@ -575,12 +575,12 @@ wheels = [
 
 [[package]]
 name = "xbrl-core"
-version = "0.1.2"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lxml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/08/21/5ad1b25bf7c2d65c3849f4eeb7a76d434c6b301b254a3a8dd6f539a06853/xbrl_core-0.1.2.tar.gz", hash = "sha256:2a35028d6a63dc86aff94054fc5d815f1c88818cb0a54af36979e4a3914f7b08", size = 69649, upload-time = "2026-03-06T01:35:05.205Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/06/227771cdb68711916f58b5958d730b9d8ecdde31c79692d8f09d6d215dbf/xbrl_core-0.2.1.tar.gz", hash = "sha256:12ca238b34f6291ad4c1ebb2ef244beabb3e8ab708c1dbeae5c411567521003a", size = 71017, upload-time = "2026-03-20T11:43:54.888Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/92/30fc7a8b0cb555ca8af6d1952a1161faf33a6092daa1dba8d15594041095/xbrl_core-0.1.2-py3-none-any.whl", hash = "sha256:8e588812517d3a14ae2b702ff23b235cfef3ff06178e78433821abc943008b88", size = 90562, upload-time = "2026-03-06T01:35:01.62Z" },
+    { url = "https://files.pythonhosted.org/packages/09/e2/6d0ed561873f1b13e8eac0fad75c4ccea091ad24f680a98ef35eec2253ab/xbrl_core-0.2.1-py3-none-any.whl", hash = "sha256:41dda6eeb1e1c9f52b3a1917f072d822451e217a8ee449978c3ce0b86b448387", size = 92533, upload-time = "2026-03-20T11:43:51.533Z" },
 ]

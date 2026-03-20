@@ -156,6 +156,7 @@ async def _run_dump(
     writers = _ParquetWriters(output_dir, prefix, "zstd")
     xbrl_ok = 0
     errors = 0
+    dl_errors = 0
     processed = 0
 
     try:
@@ -175,12 +176,16 @@ async def _run_dump(
             parse_sem = asyncio.Semaphore(max_workers * 2)
 
             async def _process(filing: Any, pool: Any) -> None:
-                nonlocal xbrl_ok, errors, processed
+                nonlocal xbrl_ok, errors, processed, dl_errors
                 doc_id = filing.doc_id
                 try:
                     async with parse_sem:
                         async with dl_sem:
-                            dl_result = await filing.afetch_xbrl()
+                            try:
+                                dl_result = await filing.afetch_xbrl()
+                            except Exception:
+                                dl_errors += 1
+                                raise
                             xbrl_data = dl_result.data
                         result = await loop.run_in_executor(
                             pool,
@@ -198,14 +203,14 @@ async def _run_dump(
                     del result
                     xbrl_ok += 1
                 except Exception as exc:
-                    logger.debug("XBRL パース失敗: %s (%s)", doc_id, exc)
+                    logger.debug("XBRL 失敗: %s (%s)", doc_id, exc)
                     writers.write_rows("filings", [serialize_filing(filing, False)])
                     errors += 1
                 processed += 1
                 if processed % 20 == 0:
                     gc.collect()
                 if processed % 100 == 0:
-                    print(f"  ... {processed}/{xbrl_count} 完了 (errors={errors})")
+                    print(f"  ... {processed}/{xbrl_count} 完了 (errors={errors}, dl={dl_errors}, parse={errors - dl_errors})")
 
             with ProcessPoolExecutor(max_workers=max_workers) as pool:
                 await asyncio.gather(
@@ -266,7 +271,7 @@ async def _run_dump(
     print(f"\n[3/3] 結果")
     print(f"  書類数: {total_filings}")
     print(f"  XBRL: {xbrl_ok}/{xbrl_count} 成功")
-    print(f"  エラー: {errors}")
+    print(f"  エラー: {errors} (DL={dl_errors}, パース={errors - dl_errors})")
     print(f"  時間: {_fmt_time(elapsed)}")
     print(f"  メモリ peak: {_fmt_mb(peak)}")
     print(f"  ファイルサイズ: {file_sizes['__total__']:.1f} MB")

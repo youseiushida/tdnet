@@ -7,8 +7,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from xbrl_core import CalculationLinkbase
-    from xbrl_core.linkbase.definition import DefinitionTree
+    from xbrl_core import CalculationLinkbase, DefinitionLinkbase
 
     from tdnet.filing import Filing
     from tdnet.models.types import LineItem
@@ -176,7 +175,7 @@ def serialize_calc_edges(
 
 
 def serialize_def_parents(
-    definition_linkbase: dict[str, DefinitionTree] | None,
+    definition_linkbase: DefinitionLinkbase | None,
     doc_id: str,
 ) -> list[dict[str, Any]]:
     """DefinitionLinkbase → parent_index → dict 行リストに変換する。

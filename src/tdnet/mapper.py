@@ -54,7 +54,7 @@ from tdnet.models.statement_mappings import (
 from tdnet.models.summary_mappings import lookup_summary
 
 if TYPE_CHECKING:
-    from xbrl_core import CalculationLinkbase, DefinitionTree
+    from xbrl_core import CalculationLinkbase, DefinitionLinkbase
 
     from tdnet.models.types import LineItem
 
@@ -340,7 +340,7 @@ def _find_standard_ancestor(
 
 
 def build_parent_index(
-    definition_linkbase: dict[str, DefinitionTree] | None,
+    definition_linkbase: DefinitionLinkbase | None,
 ) -> dict[str, str]:
     """Definition Linkbase の general-special arcrole から逆引きインデックスを構築する。
 
@@ -359,7 +359,7 @@ def build_parent_index(
         return {}
 
     child_to_parents: dict[str, list[tuple[str, str]]] = {}
-    for tree in definition_linkbase.values():
+    for tree in definition_linkbase.trees.values():
         for arc in tree.arcs:
             if arc.arcrole == _ARCROLE_GENERAL_SPECIAL:
                 child_to_parents.setdefault(arc.to_concept, []).append(

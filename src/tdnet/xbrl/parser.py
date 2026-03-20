@@ -9,7 +9,7 @@ from pathlib import Path
 
 from xbrl_core import (
     CalculationLinkbase,
-    DefinitionTree,
+    DefinitionLinkbase,
     PresentationTree,
     ParsedXBRL,
     RawLabel,
@@ -241,7 +241,7 @@ def _parse_filer_labels(linkbases: dict[str, bytes]) -> tuple[RawLabel, ...] | N
 
 def _parse_def_linkbase(
     linkbases: dict[str, bytes],
-) -> dict[str, DefinitionTree] | None:
+) -> DefinitionLinkbase | None:
     """リンクベース辞書から Definition Linkbase をパースする。"""
     if "def" not in linkbases:
         return None
